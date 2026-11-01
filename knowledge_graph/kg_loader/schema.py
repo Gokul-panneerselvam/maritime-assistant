@@ -18,6 +18,7 @@ CONSTRAINTS: List[str] = [
     "CREATE CONSTRAINT unique_congestion_id IF NOT EXISTS FOR (cg:Congestion) REQUIRE cg.congestion_id IS UNIQUE",
     "CREATE CONSTRAINT unique_booking_id IF NOT EXISTS FOR (b:Booking) REQUIRE b.booking_id IS UNIQUE",
     "CREATE CONSTRAINT unique_customer_id IF NOT EXISTS FOR (c:Customer) REQUIRE c.customer_id IS UNIQUE",
+    "CREATE CONSTRAINT unique_org_id IF NOT EXISTS FOR (org:Organization) REQUIRE org.org_id IS UNIQUE",
     "CREATE CONSTRAINT unique_message_id IF NOT EXISTS FOR (msg:Message) REQUIRE msg.message_id IS UNIQUE",
 ]
 

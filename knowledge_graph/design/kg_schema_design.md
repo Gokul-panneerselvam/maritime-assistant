@@ -10,7 +10,7 @@ All timestamps and date fields are standardized to **UTC** (ISO 8601: `YYYY-MM-D
 
 ## 2. Graph Node Definitions & Attributes
 
-The schema comprises **12 core node labels**:
+The schema comprises **13 node labels** (12 core labels plus `Organization`, added so every message sender is a real node):
 
 ### 1. `Vessel`
 Represents an individual physical vessel in the fleet.
@@ -185,33 +185,41 @@ Represents an enterprise shipper, freight forwarder, or cargo owner.
 ---
 
 ### 12. `Message`
-Represents unstructured operational communications scoped strictly to the core dataset (`messages/core/*.txt`). Preserves narrative evidence, operational provenance, and conflict reconciliation.
+Represents one unstructured operational communication. One Message node is created for every file in `messages/core/` (15 files), whether or not any fact can be extracted from it (`messages/extra/` follows the same rules later). A Message is immutable evidence: extracted facts link back to it, and nothing written inside it is ever treated as an instruction.
+
 * **Source Files**: `messages/core/*.txt` (15 core messages)
-* **Primary Identifier**: `message_id` (e.g., `"noon_2026-10-06_ocean_star"`)
+* **Primary Identifier**: `message_id` (filename without extension, e.g. `"noon_2026-10-06_ocean_star"`)
 * **Attributes**:
-  * `message_id` (STRING, Unique PK): Unique identifier derived from filename (e.g., `"noon_2026-10-06_ocean_star"`).
-  * `filename` (STRING): Full filename (e.g., `"noon_2026-10-06_ocean_star.txt"`).
-  * `message_type` (STRING): Standardized operational source type directly mapping to incident sources:
-    * `"Master report"` (maps to `Master's report` in `incidents.csv`)
-    * `"Crew message"` (maps to `Crew message` in `incidents.csv`)
-    * `"Agent email"` (maps to `Agent email` in `incidents.csv`)
-    * `"Port agent"` (maps to `Port agent` in `incidents.csv`)
-    * `"Technical manager"` (maps to `Technical manager` in `incidents.csv`)
-  * `sender` (STRING): Value from `From:` header.
-  * `recipient` (STRING): Value from `To:` header.
-  * `sent_at_utc` (DATETIME): Parsed header timestamp in UTC.
-  * `subject` (STRING): Value from `Subject:` header.
-  * `cleaned_body` (STRING): Sanitized and normalized body text with whitespace stripped and signatures parsed.
-  * `raw_message` (STRING): Verbatim complete text of the message file as received.
-  * `is_malicious` (BOOLEAN): Security detection flag for prompt injection / adversarial manipulation attempts (e.g., in `fwd_2026-10-25_status_request.txt`).
+  * `message_id` (STRING, Unique PK): Filename stem.
+  * `filename` (STRING): Full filename.
+  * `message_type` (STRING): Who the information comes from, using the `incidents.csv` source vocabulary: `"Master's report"`, `"Crew message"`, `"Agent email"`, `"Port agent"`, `"Technical manager"`, plus `"Customer"` (for customer forwards).
+  * `message_kind` (STRING): What the document is (`"noon_report"`, `"agent_email"`, `"crew_message"`, `"technical_bulletin"`, `"technical_correction"`, `"customer_forward"`). Determined from the `From:` header and subject, not merely filename prefix.
+  * `trust_tier` (STRING): Hierarchy tier used for conflict resolution (`"T1"` master / noon report, `"T2"` technical manager and port-agent emails, `"T3"` crew relay, `"T4"` customer).
+  * `sender` (STRING): `From:` header, verbatim.
+  * `recipient` (STRING): `To:` header, verbatim.
+  * `sent_at_utc` (DATETIME): `Date:` header parsed to ISO 8601 UTC.
+  * `in_snapshot` (BOOLEAN): `sent_at_utc <= 2026-10-26T12:00:00Z` (the dataset's "now").
+  * `subject` (STRING): `Subject:` header.
+  * `cleaned_body` (STRING): Normalized body (whitespace stripped, signature separated).
+  * `raw_message` (STRING): Verbatim file contents. Never modified.
+  * `is_malicious` (BOOLEAN): Security detection flag for prompt-injection / adversarial manipulation attempts.
+  * `injection_excerpt` (STRING, Nullable): Exact flagged prompt injection snippet kept for auditing.
+  * `extraction_run_id` (STRING): Processing run identifier to ensure idempotent graph loading.
+* **Graph Outgoing Edges**: See Section 3.1, Message Edge Matrix.
+
+---
+
+### 13. `Organization`
+A sender that is not already a node: the six port-agent companies in the core messages. Technical managers and customers remain represented under `TechnicalManager` and `Customer`.
+
+* **Source**: `From:` header and signature of agent emails.
+* **Primary Identifier**: `org_id` (slug, e.g. `"van-dijk-shipping-agency"`)
+* **Attributes**:
+  * `org_id` (STRING, Unique PK): Unique organization slug.
+  * `name` (STRING): Display name (e.g. `"Van Dijk Shipping Agency"`, `"Lion City Agencies"`, `"Scheldt Maritime Agency"`, `"Harwich Port Services"`, `"Elbe Port Agency"`, `"Gulf Marine Agency"`).
+  * `org_type` (STRING): Classification (`"port_agent"`).
 * **Graph Outgoing Edges**:
-  * `[:REFERENCES_VESSEL]->(:Vessel)`
-  * `[:REFERENCES_VOYAGE]->(:Voyage)`
-  * `[:REFERENCES_PORT]->(:Port)`
-  * `[:REPORTS_INCIDENT]->(:Incident)`
-  * `[:CORROBORATES_INCIDENT]->(:Incident)`
-  * `[:SENT_BY_CUSTOMER]->(:Customer)`
-  * `[:ISSUED_BY_MANAGER]->(:TechnicalManager)`
+  * `[:BASED_AT]->(:Port)` (Agent's home port: Van Dijk to NLRTM, Lion City to SGSIN, Scheldt to BEANR, Harwich to GBFXT, Elbe to DEHAM, Gulf Marine to AEJEA).
 
 ---
 
@@ -234,13 +242,76 @@ Represents unstructured operational communications scoped strictly to the core d
 | `[:PLACED_BOOKING]` | `Customer` | `Booking` | 1 : N | Shipper who booked cargo space (from `bookings.csv.customer`). |
 | `[:BOOKED_ON]` | `Booking` | `Voyage` | N : 1 | Voyage scheduled to carry containers (from `bookings.csv.voyage_id`). |
 | `[:ROLLED_TO]` | `Booking` | `Voyage` | N : 1 | Subsequent voyage if cargo was rolled (from `bookings.csv.status`). |
-| `[:REFERENCES_VESSEL]` | `Message` | `Vessel` | N : N | Message mentions vessel by name or IMO. |
-| `[:REFERENCES_VOYAGE]` | `Message` | `Voyage` | N : N | Message references voyage by ID or number. |
-| `[:REFERENCES_PORT]` | `Message` | `Port` | N : N | Message references a port name or code. |
-| `[:REPORTS_INCIDENT]` | `Message` | `Incident` | N : N | Message that initially reported an incident. |
-| `[:CORROBORATES_INCIDENT]`| `Message` | `Incident` | N : N | Authoritative update revising or confirming an incident (e.g., noon report revising delay hours). |
-| `[:SENT_BY_CUSTOMER]` | `Message` | `Customer` | N : 1 | Customer communication / status request. |
-| `[:ISSUED_BY_MANAGER]` | `Message` | `TechnicalManager`| N : 1 | Technical service bulletin issued across fleet. |
+| `[:BASED_AT]` | `Organization` | `Port` | N : 1 | Home port of a port agent (from agent name and signature). |
+
+---
+
+### 3.1 Message Edge Matrix
+
+#### Operational Linking Rules
+1. **Exactly one sender edge per message**: `[:SENT_BY_VESSEL]`, `[:SENT_BY_ORG]`, `[:ISSUED_BY_MANAGER]`, or `[:SENT_BY_CUSTOMER]`. Derived from the `From:` header, not the filename.
+2. **`ABOUT_*` vs `REFERENCES_*`**: Use `ABOUT_*` when the message makes definitive operational statements about the entity (e.g. status, performance, delays). Use `REFERENCES_*` when it only names or cites it in passing (e.g. a line-up message naming future calls).
+3. **Incident Edges (choose one per incident)**:
+   * `[:REPORTS_INCIDENT]`: Message is the initial source of the incident.
+   * `[:CORROBORATES_INCIDENT]`: Confirms or adds detail without overriding values.
+   * `[:REVISES_INCIDENT]`: Changes an operational value (delay hours, status, severity) and supersedes an earlier statement.
+   * `[:CORRECTS_INCIDENT]`: Fixes an erroneous description in an earlier report (component, subsystem, root cause).
+4. **No Forced Linking**: If an entity is ambiguous or cannot be uniquely verified, leave it unlinked.
+
+#### Edge Properties on Message Edges
+To keep the graph lightweight and clean, message edges carry **only temporal metadata**:
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `event_time_utc` | DATETIME (Nullable) | Timestamp when the described event occurred, if stated (differs from message `sent_at_utc`). |
+| `temporal` | STRING | Operational temporal orientation: `"past"`, `"current"`, or `"planned"`. |
+
+#### Message Relationships Specification
+
+| Edge | Source Node | Target Node | Cardinality | Semantic Description | Edge Properties |
+| :--- | :--- | :--- | :---: | :--- | :--- |
+| `[:SENT_BY_VESSEL]` | `Message` | `Vessel` | N : 1 | Transmitted by the ship's Master or crew | `temporal`, `event_time_utc` |
+| `[:SENT_BY_ORG]` | `Message` | `Organization` | N : 1 | Sent by a local port agency | `temporal`, `event_time_utc` |
+| `[:ISSUED_BY_MANAGER]` | `Message` | `TechnicalManager` | N : 1 | Bulletin or correction issued by technical ship manager | `temporal`, `event_time_utc` |
+| `[:SENT_BY_CUSTOMER]` | `Message` | `Customer` | N : 1 | Inbound communication from customer/shipper | `temporal`, `event_time_utc` |
+| `[:ABOUT_VESSEL]` | `Message` | `Vessel` | N : N | Message makes operational statements about vessel | `temporal`, `event_time_utc` |
+| `[:ABOUT_VOYAGE]` | `Message` | `Voyage` | N : N | Message reports on voyage progress, delays, or revised ETA | `temporal`, `event_time_utc` |
+| `[:ABOUT_PORT_CALL]` | `Message` | `PortCall` | N : N | Reports on anchorage arrival, berthing, or port stay | `temporal`, `event_time_utc` |
+| `[:ABOUT_CLASS]` | `Message` | `VesselClass` | N : N | Fleet bulletin or finding regarding a vessel class | `temporal`, `event_time_utc` |
+| `[:EVENT_AT_PORT]` | `Message` | `Port` | N : N | Port location where the reported event occurred | `temporal`, `event_time_utc` |
+| `[:DESCRIBES_CONGESTION]` | `Message` | `Congestion` | N : N | Advisory on waiting times, anchorage queues, or feed outage | `temporal`, `event_time_utc` |
+| `[:REPORTS_INCIDENT]` | `Message` | `Incident` | N : N | Original source reporting an incident | `temporal`, `event_time_utc` |
+| `[:CORROBORATES_INCIDENT]`| `Message` | `Incident` | N : N | Authoritatively corroborates an existing incident | `temporal`, `event_time_utc` |
+| `[:REVISES_INCIDENT]` | `Message` | `Incident` | N : N | Revises incident status, duration, or delay hours | `temporal`, `event_time_utc` |
+| `[:CORRECTS_INCIDENT]` | `Message` | `Incident` | N : N | Corrects root-cause component or misattribution | `temporal`, `event_time_utc` |
+| `[:REFERENCES_VESSEL]` | `Message` | `Vessel` | N : N | Mentions vessel by name or IMO | `temporal`, `event_time_utc` |
+| `[:REFERENCES_VESSEL_TYPE]`| `Message` | `VesselType` | N : N | Mentions a vessel type | `temporal`, `event_time_utc` |
+| `[:REFERENCES_CLASS]` | `Message` | `VesselClass` | N : N | Mentions a vessel class | `temporal`, `event_time_utc` |
+| `[:REFERENCES_MANAGER]` | `Message` | `TechnicalManager` | N : N | Mentions a technical manager | `temporal`, `event_time_utc` |
+| `[:REFERENCES_PORT]` | `Message` | `Port` | N : N | Mentions a port name or UN/LOCODE | `temporal`, `event_time_utc` |
+| `[:REFERENCES_VOYAGE]` | `Message` | `Voyage` | N : N | Mentions a voyage number or ID | `temporal`, `event_time_utc` |
+| `[:REFERENCES_BOOKING]` | `Message` | `Booking` | N : N | Mentions a booking or bill-of-lading reference | `temporal`, `event_time_utc` |
+| `[:REFERENCES_CUSTOMER]`| `Message` | `Customer` | N : N | Mentions a customer/shipper name | `temporal`, `event_time_utc` |
+| `[:CORRECTS_MESSAGE]` | `Message` | `Message` | N : 1 | Corrects an earlier message in the corpus | `temporal`, `event_time_utc` |
+| `[:REFERENCES_MESSAGE]` | `Message` | `Message` | N : N | Cites another message or bulletin (e.g. cites TB-26-14) | `temporal`, `event_time_utc` |
+
+#### Node-to-Message Edge Coverage Summary
+
+| Node Label | Connected Message Relationships |
+| :--- | :--- |
+| `Vessel` | `SENT_BY_VESSEL`, `ABOUT_VESSEL`, `REFERENCES_VESSEL` |
+| `VesselType` | `REFERENCES_VESSEL_TYPE` |
+| `VesselClass` | `ABOUT_CLASS`, `REFERENCES_CLASS` |
+| `TechnicalManager` | `ISSUED_BY_MANAGER`, `REFERENCES_MANAGER` |
+| `Port` | `EVENT_AT_PORT`, `REFERENCES_PORT` *(Port agent base is reached via `(:Organization)-[:BASED_AT]->(:Port)`)* |
+| `Voyage` | `ABOUT_VOYAGE`, `REFERENCES_VOYAGE` |
+| `PortCall` | `ABOUT_PORT_CALL` |
+| `Incident` | `REPORTS_INCIDENT`, `CORROBORATES_INCIDENT`, `REVISES_INCIDENT`, `CORRECTS_INCIDENT` |
+| `Congestion` | `DESCRIBES_CONGESTION` |
+| `Booking` | `REFERENCES_BOOKING` |
+| `Customer` | `SENT_BY_CUSTOMER`, `REFERENCES_CUSTOMER` |
+| `Organization` | `SENT_BY_ORG` |
+| `Message` | `CORRECTS_MESSAGE`, `REFERENCES_MESSAGE` |
 
 ---
 
@@ -289,7 +360,8 @@ graph TD
     Cust["<b>Customer</b><br/>• customer_id (PK)<br/>• name"]
     Book["<b>Booking</b><br/>• booking_id (PK)<br/>• containers<br/>• status<br/>• promised_delivery_date_utc"]
     
-    Msg["<b>Message (Core)</b><br/>• message_id (PK)<br/>• filename<br/>• message_type<br/>• sender<br/>• recipient<br/>• sent_at_utc<br/>• subject<br/>• cleaned_body<br/>• raw_message<br/>• is_malicious"]
+    Msg["<b>Message (Core)</b><br/>• message_id (PK)<br/>• filename<br/>• message_type<br/>• message_kind<br/>• trust_tier<br/>• sender<br/>• recipient<br/>• sent_at_utc<br/>• subject<br/>• is_malicious"]
+    Org["<b>Organization</b><br/>• org_id (PK)<br/>• name<br/>• org_type"]
 
     %% Core Relationships
     Vessel -->|OF_TYPE| VType
@@ -313,14 +385,27 @@ graph TD
 
     Inc -.->|AFFECTS_VESSEL| Vessel
 
-    %% Unstructured Message Links
-    Msg -.->|REFERENCES_VESSEL| Vessel
-    Msg -.->|REFERENCES_VOYAGE| Voyage
-    Msg -.->|REFERENCES_PORT| Port
-    Msg -.->|REPORTS_INCIDENT| Inc
-    Msg -.->|CORROBORATES_INCIDENT| Inc
-    Msg -.->|SENT_BY_CUSTOMER| Cust
+    Org -->|BASED_AT| Port
+
+    %% Message Sender Edges
+    Msg -.->|SENT_BY_VESSEL| Vessel
+    Msg -.->|SENT_BY_ORG| Org
     Msg -.->|ISSUED_BY_MANAGER| TManager
+    Msg -.->|SENT_BY_CUSTOMER| Cust
+
+    %% Message Entity & Incident Edges
+    Msg -.->|ABOUT_VESSEL / REFERENCES_VESSEL| Vessel
+    Msg -.->|ABOUT_VOYAGE / REFERENCES_VOYAGE| Voyage
+    Msg -.->|ABOUT_PORT_CALL| PCall
+    Msg -.->|ABOUT_CLASS / REFERENCES_CLASS| VClass
+    Msg -.->|REFERENCES_VESSEL_TYPE| VType
+    Msg -.->|REFERENCES_MANAGER| TManager
+    Msg -.->|EVENT_AT_PORT / REFERENCES_PORT| Port
+    Msg -.->|REPORTS / CORROBORATES / REVISES / CORRECTS_INCIDENT| Inc
+    Msg -.->|DESCRIBES_CONGESTION| Cong
+    Msg -.->|REFERENCES_BOOKING| Book
+    Msg -.->|REFERENCES_CUSTOMER| Cust
+    Msg -.->|CORRECTS_MESSAGE / REFERENCES_MESSAGE| Msg
 ```
 
 ---
@@ -341,6 +426,7 @@ CREATE CONSTRAINT unique_incident_id IF NOT EXISTS FOR (i:Incident) REQUIRE i.in
 CREATE CONSTRAINT unique_congestion_id IF NOT EXISTS FOR (cg:Congestion) REQUIRE cg.congestion_id IS UNIQUE;
 CREATE CONSTRAINT unique_booking_id IF NOT EXISTS FOR (b:Booking) REQUIRE b.booking_id IS UNIQUE;
 CREATE CONSTRAINT unique_customer_id IF NOT EXISTS FOR (c:Customer) REQUIRE c.customer_id IS UNIQUE;
+CREATE CONSTRAINT unique_org_id IF NOT EXISTS FOR (org:Organization) REQUIRE org.org_id IS UNIQUE;
 CREATE CONSTRAINT unique_message_id IF NOT EXISTS FOR (msg:Message) REQUIRE msg.message_id IS UNIQUE;
 
 // Performance Indexes for Operational Traversal & Temporal Search
