@@ -19,7 +19,10 @@ wheels/
 .vscode/
 .idea/
 
-# OS generated files
+# Ingestion reports
+ingestion_report_logs/*.json
+ingestion_report_logs/*.md
+!ingestion_report_logs/.gitkeep
 .DS_Store
 *.DS_Store
 Thumbs.db

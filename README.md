@@ -208,11 +208,31 @@ maritime-assistant/
 ### Environment Variables
 Create `.env` from `.env.example`:
 
+```bash
+cp .env.example .env
+```
+
+Configure your LLM provider and Neo4j credentials in `.env`:
+
 ```ini
+# LLM Providers (OpenRouter, Groq, Google Gemini)
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash-vision-exp
+OPENROUTER_PROVIDER_NAME=deepinfra/fp8
+OPENROUTER_MAX_TOKENS=4096
+
+# Neo4j Database Configuration
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=password
-NEO4J_DATABASE=neo4j
+NEO4J_PASSWORD=your_password
+NEO4J_DATABASE=maritime-kg
+
+# LangSmith Observability (Optional)
+LANGCHAIN_TRACING_V2=true
+LANGSMITH_API_KEY=lsv2_pt_...
+LANGSMITH_ENDPOINT=https://apac.api.smith.langchain.com
+LANGCHAIN_PROJECT=maritime
 ```
 
 ### Installation
@@ -249,9 +269,61 @@ uv run python -m knowledge_graph.kg_loader.main --clear
 
 ---
 
-## 7. Running Tests
+## 7. Operational Message Ingestion (`MessageLoaderGraph`)
 
-Run the complete test suite across ingestion, MCP server, security safeguards, and mutation tools:
+An idempotent, 3-node **LangGraph** workflow that extracts, standardizes, resolves, and ingests unstructured maritime communications (noon reports, agent logs, technical bulletins, customer inquiries) into the Knowledge Graph:
+
+```mermaid
+flowchart LR
+    A["Raw Message File<br/>(*.txt)"] --> Ext["1. Extractor Node<br/>• Parse RFC Headers<br/>• Convert Sent Date to UTC<br/>• LLM Prompt Injection Scanner"]
+    Ext --> Res["2. Resolver Node<br/>• Sender & Trust Tier (T1-T4)<br/>• Entity Normalization (`Canonical`)<br/>• Date Standardization (`ISO UTC`)<br/>• Excision of Adversarial Directives"]
+    Res --> Upd["3. KG Updator Node<br/>• MERGE (:Message) & (:SENT_BY_*)<br/>• ReAct Agent with MCP Tools<br/>• Cross-Validate & Link Edges"]
+    Upd --> Rep["Audit Log Reports<br/>(ingestion_report_logs/*.json & *.md)"]
+```
+
+### Key Technical Features
+
+1. **Idempotency & Re-run Safety**:
+   - Programmatically executes `MERGE (msg:Message {message_id: $id})` with explicit `ON CREATE SET` and `ON MATCH SET`.
+   - Neo4j uniqueness constraint `unique_message_id` on `Message.message_id` prevents duplicate nodes.
+   - All relationship mutations use Cypher `MERGE` patterns so re-ingesting a batch updates properties without duplicating edges.
+   - The CLI supports `--skip-existing` to avoid reprocessing unchanged messages.
+
+2. **LLM Adversarial Prompt Injection Defense & Text Excision**:
+   - Employs an LLM-based security scanner (`prompt_injection_detection`) to flag prompt injections, instructions to falsify records, or jailbreak directives.
+   - Malicious excerpts are isolated, quarantined with `is_malicious = true` and `injection_excerpt` recorded on the node.
+   - The persisted `cleaned_body` has adversarial instructions and wrappers (`-- forwarded note pasted from our system --`, `-- end --`) completely excised.
+
+3. **Strict Relationship Property Constraints**:
+   - All outgoing semantic edges attached to `:Message` (`[:ABOUT_VOYAGE]`, `[:ABOUT_VESSEL]`, `[:CORROBORATES_INCIDENT]`, `[:REPORTS_INCIDENT]`, `[:REFERENCES_PORT]`, etc.) are strictly constrained to:
+     - `temporal`: `"past"` | `"current"` | `"planned"`
+     - `event_time_utc`: ISO 8601 UTC timestamp string (or `null` if unspecified)
+
+4. **Decoupled Prompt Management**:
+   - All system and user prompts are managed independently in [`prompts/message_loader_prompts.yaml`](file:///prompts/message_loader_prompts.yaml) for clean auditability and tuning without Python code modifications.
+
+### Ingesting Messages via CLI
+
+Process a directory of message files in batch with automatic report generation:
+
+```powershell
+# Ingest core messages (15 files)
+uv run python -m knowledge_graph.kg_loader.message_loader.runner --messages-dir synthetic_dataset/data/messages/core
+
+# Ingest extra messages with skip-existing for incremental updates (45 files)
+uv run python -m knowledge_graph.kg_loader.message_loader.runner --messages-dir synthetic_dataset/data/messages/extra --skip-existing
+
+# Ingest with message limit
+uv run python -m knowledge_graph.kg_loader.message_loader.runner --messages-dir synthetic_dataset/data/messages/core --limit 5
+```
+
+All batch executions produce structured audit reports in `ingestion_report_logs/` (both `.json` and `.md`) summarizing persisted messages, quarantined prompt injections, nodes created/updated, and semantic edges attached.
+
+---
+
+## 8. Running Tests
+
+Run the complete test suite across tabular ingestion, MCP tools, MessageLoaderGraph workflow, and security checks:
 
 ```powershell
 # Run all test suites
@@ -260,4 +332,5 @@ uv run python -m unittest discover tests
 # Or run individual suites
 uv run python -m unittest tests/test_ingestion.py
 uv run python -m unittest tests/test_mcp.py
+uv run python -m unittest tests/test_message_loader.py
 ```

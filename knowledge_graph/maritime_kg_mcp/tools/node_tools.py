@@ -318,6 +318,13 @@ def _create_single_node(
             # Check if target exists
             target_check_q = f"MATCH (t:{target_label} {{{target_key}: $tval}}) RETURN count(t) AS cnt"
             t_res = client.execute_query(target_check_q, {"tval": target_value})
+            if (not t_res or t_res[0].get("cnt", 0) == 0) and target_label in ("Vessel", "Port", "VesselClass"):
+                alt_check_q = f"MATCH (t:{target_label} {{name: $tval}}) RETURN count(t) AS cnt"
+                alt_res = client.execute_query(alt_check_q, {"tval": target_value})
+                if alt_res and alt_res[0].get("cnt", 0) > 0:
+                    target_key = "name"
+                    t_res = alt_res
+
             if not t_res or t_res[0].get("cnt", 0) == 0:
                 failed_edges.append({
                     "relationship_type": rel_type,
@@ -526,6 +533,13 @@ def _update_single_node(
             # Verify target node exists
             target_check_q = f"MATCH (t:{target_label} {{{target_key}: $tval}}) RETURN count(t) AS cnt"
             t_res = client.execute_query(target_check_q, {"tval": target_value})
+            if (not t_res or t_res[0].get("cnt", 0) == 0) and target_label in ("Vessel", "Port", "VesselClass"):
+                alt_check_q = f"MATCH (t:{target_label} {{name: $tval}}) RETURN count(t) AS cnt"
+                alt_res = client.execute_query(alt_check_q, {"tval": target_value})
+                if alt_res and alt_res[0].get("cnt", 0) > 0:
+                    target_key = "name"
+                    t_res = alt_res
+
             if not t_res or t_res[0].get("cnt", 0) == 0:
                 failed_edges.append({
                     "relationship_type": rel_type,
