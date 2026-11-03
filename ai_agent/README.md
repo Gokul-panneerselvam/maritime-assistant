@@ -6,6 +6,20 @@ The agent assists fleet dispatchers, port captains, and cargo superintendents in
 
 ---
 
+## 📽️ Agent Demo & System Walkthrough
+
+Watch the LangGraph Maritime Operations Agent in action as it processes complex fleet queries, normalizes entities, plans research paths, invokes FastMCP tools, and returns epistemically segregated findings:
+
+<p align="center">
+  <video src="../docs/assets/maritime_assistant_demo.mp4" controls="controls" width="100%" style="max-width: 850px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+> 💡 *If your browser does not render inline video playback, you can [view or download the demo video directly](../docs/assets/maritime_assistant_demo.mp4).*
+
+---
+
 ## 1. Five-Layer LangGraph Architecture
 
 The AI agent executes as a cyclic StateGraph where incoming turns pass through 5 specialized nodes:

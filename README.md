@@ -6,6 +6,20 @@ The system standardizes all operational tabular data to UTC, integrates unstruct
 
 ---
 
+## 📽️ Demo & System Walkthrough
+
+Watch the complete demonstration of the Maritime Knowledge Graph & Operations Assistant, showcasing multi-turn agent reasoning, FastMCP domain context tools, epistemic fact segregation, and the React TypeScript operations dashboard:
+
+<p align="center">
+  <video src="docs/assets/maritime_assistant_demo.mp4" controls="controls" width="100%" style="max-width: 850px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+> 💡 *If your browser does not render inline video playback, you can [view or download the demo video directly](docs/assets/maritime_assistant_demo.mp4).*
+
+---
+
 ## 1. Architecture Overview
 
 ```mermaid
