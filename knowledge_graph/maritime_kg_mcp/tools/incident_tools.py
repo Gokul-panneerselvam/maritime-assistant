@@ -50,8 +50,15 @@ def search_incidents(
     }
     try:
         results = client.execute_read_query(SEARCH_INCIDENTS_CYPHER, params)
-        return {"success": True, "count": len(results), "incidents": results}
+        if not results:
+            return {
+                "status": "NO_DATA",
+                "message": "NO_DATA_FOUND: No maritime incidents matched the specified filter criteria.",
+                "count": 0,
+                "incidents": []
+            }
+        return {"status": "SUCCESS", "success": True, "count": len(results), "incidents": results}
     except Exception as e:
         logger.error("Error searching incidents: %s", e)
-        return {"success": False, "error": str(e), "incidents": []}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "message": "NO_DATA_FOUND due to query error.", "count": 0, "incidents": []}
 

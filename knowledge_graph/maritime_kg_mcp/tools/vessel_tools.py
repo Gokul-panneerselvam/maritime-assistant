@@ -88,19 +88,32 @@ def search_vessels(
     }
     try:
         results = client.execute_read_query(SEARCH_VESSELS_CYPHER, params)
-        return {"success": True, "count": len(results), "vessels": results}
+        if not results:
+            return {
+                "status": "NO_DATA",
+                "message": "NO_DATA_FOUND: No vessels matched the specified filter criteria.",
+                "count": 0,
+                "vessels": []
+            }
+        return {"status": "SUCCESS", "success": True, "count": len(results), "vessels": results}
     except Exception as e:
         logger.error("Error searching vessels: %s", e)
-        return {"success": False, "error": str(e), "vessels": []}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "message": "NO_DATA_FOUND due to query error.", "count": 0, "vessels": []}
 
 def get_vessel_details(client: Neo4jClient, vessel_id: str) -> Dict[str, Any]:
     """Retrieves 360-degree vessel profile, including technical management, voyages, and incidents."""
     try:
         results = client.execute_read_query(GET_VESSEL_DETAILS_CYPHER, {"vessel_id": vessel_id.strip()})
         if not results:
-            return {"success": False, "error": f"Vessel '{vessel_id}' not found."}
-        return {"success": True, "vessel": results[0]}
+            return {
+                "status": "NO_DATA",
+                "message": f"NO_DATA_FOUND: Vessel '{vessel_id}' was not found in the Maritime Knowledge Graph.",
+                "success": False,
+                "error": f"Vessel '{vessel_id}' not found.",
+                "vessel": None
+            }
+        return {"status": "SUCCESS", "success": True, "vessel": results[0]}
     except Exception as e:
         logger.error("Error getting vessel details: %s", e)
-        return {"success": False, "error": str(e)}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "vessel": None}
 

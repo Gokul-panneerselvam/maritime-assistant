@@ -34,11 +34,11 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"Starting Maritime Knowledge Graph MCP Server (transport: {args.transport})...", file=sys.stderr)
     if args.transport == "sse":
+        print(f"Starting Maritime Knowledge Graph MCP Server (transport: {args.transport})...", file=sys.stderr)
         mcp.run(transport="sse", host=args.host, port=args.port)
     else:
-        mcp.run(transport="stdio")
+        mcp.run(transport="stdio", show_banner=False)
 
 if __name__ == "__main__":
     main()

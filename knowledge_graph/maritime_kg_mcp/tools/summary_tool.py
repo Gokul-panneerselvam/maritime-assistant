@@ -27,9 +27,16 @@ def get_operational_summary(client: Neo4jClient) -> Dict[str, Any]:
     try:
         results = client.execute_read_query(SUMMARY_CYPHER)
         if not results:
-            return {"success": False, "error": "No operational metrics returned."}
+            return {
+                "status": "NO_DATA",
+                "message": "NO_DATA_FOUND: No operational metrics returned from the database.",
+                "success": False,
+                "error": "No operational metrics returned.",
+                "metrics": None
+            }
         row = results[0]
         return {
+            "status": "SUCCESS",
             "success": True,
             "metrics": {
                 "total_vessels": row.get("total_vessels", 0),
@@ -42,5 +49,5 @@ def get_operational_summary(client: Neo4jClient) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting operational summary: %s", e)
-        return {"success": False, "error": str(e)}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "metrics": None}
 

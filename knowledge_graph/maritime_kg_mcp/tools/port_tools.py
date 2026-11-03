@@ -32,10 +32,17 @@ def search_ports(client: Neo4jClient, query: Optional[str] = None) -> Dict[str, 
     """Lists or searches ports by port code, name, or country."""
     try:
         results = client.execute_read_query(SEARCH_PORTS_CYPHER, {"query": query})
-        return {"success": True, "count": len(results), "ports": results}
+        if not results:
+            return {
+                "status": "NO_DATA",
+                "message": "NO_DATA_FOUND: No ports matched the specified search query.",
+                "count": 0,
+                "ports": []
+            }
+        return {"status": "SUCCESS", "success": True, "count": len(results), "ports": results}
     except Exception as e:
         logger.error("Error searching ports: %s", e)
-        return {"success": False, "error": str(e), "ports": []}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "message": "NO_DATA_FOUND due to query error.", "count": 0, "ports": []}
 
 def get_port_congestion(
     client: Neo4jClient,
@@ -51,8 +58,15 @@ def get_port_congestion(
     }
     try:
         results = client.execute_read_query(GET_PORT_CONGESTION_CYPHER, params)
-        return {"success": True, "count": len(results), "congestion_records": results}
+        if not results:
+            return {
+                "status": "NO_DATA",
+                "message": f"NO_DATA_FOUND: No congestion records found for port '{port_code}'.",
+                "count": 0,
+                "congestion_records": []
+            }
+        return {"status": "SUCCESS", "success": True, "count": len(results), "congestion_records": results}
     except Exception as e:
         logger.error("Error getting port congestion: %s", e)
-        return {"success": False, "error": str(e), "congestion_records": []}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "congestion_records": []}
 

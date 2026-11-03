@@ -121,19 +121,32 @@ def search_voyages(
     }
     try:
         results = client.execute_read_query(SEARCH_VOYAGES_CYPHER, params)
-        return {"success": True, "count": len(results), "voyages": results}
+        if not results:
+            return {
+                "status": "NO_DATA",
+                "message": "NO_DATA_FOUND: No voyages matched the specified search criteria.",
+                "count": 0,
+                "voyages": []
+            }
+        return {"status": "SUCCESS", "success": True, "count": len(results), "voyages": results}
     except Exception as e:
         logger.error("Error searching voyages: %s", e)
-        return {"success": False, "error": str(e), "voyages": []}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "message": "NO_DATA_FOUND due to query error.", "count": 0, "voyages": []}
 
 def get_voyage_timeline(client: Neo4jClient, voyage_id: str) -> Dict[str, Any]:
     """Retrieves end-to-end voyage timeline, milestones, incidents, and freight bookings."""
     try:
         results = client.execute_read_query(GET_VOYAGE_TIMELINE_CYPHER, {"voyage_id": voyage_id.strip()})
         if not results:
-            return {"success": False, "error": f"Voyage '{voyage_id}' not found."}
-        return {"success": True, "voyage_timeline": results[0]}
+            return {
+                "status": "NO_DATA",
+                "message": f"NO_DATA_FOUND: Voyage '{voyage_id}' was not found in the Maritime Knowledge Graph.",
+                "success": False,
+                "error": f"Voyage '{voyage_id}' not found.",
+                "voyage_timeline": None
+            }
+        return {"status": "SUCCESS", "success": True, "voyage_timeline": results[0]}
     except Exception as e:
         logger.error("Error getting voyage timeline: %s", e)
-        return {"success": False, "error": str(e)}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "voyage_timeline": None}
 

@@ -49,7 +49,7 @@ def get_db_client() -> Neo4jClient:
     return _client
 
 
-@mcp.tool()
+@mcp.tool(output_schema=None)
 def execute_read_query(
     query: str,
     parameters: Optional[Dict[str, Any]] = None,
@@ -59,6 +59,14 @@ def execute_read_query(
     Executes a validated read-only Cypher query against the Maritime Knowledge Graph.
     Mutating statements (CREATE, MERGE, SET, DELETE, DROP, etc.) are strictly forbidden.
     Results are capped to a maximum of 500 rows.
+
+    TEMPORAL & DATE FORMAT SPECIFICATION:
+    - ALL datetime values stored in the Maritime Knowledge Graph strictly use the UTC ISO-8601 format:
+      ("%Y-%m-%dT%H:%M:%SZ") (e.g. "2026-10-26T12:00:00Z").
+    - Filter datetime fields using datetime("..."):
+      WHERE voy.revised_eta_utc >= datetime("2026-10-31T00:00:00Z") AND voy.revised_eta_utc <= datetime("2026-11-06T23:59:59Z")
+    - Date-only fields (Congestion.date_utc, Booking.promised_delivery_date_utc) use ("%Y-%m-%d"): date("2026-10-20").
+    - Operational anchor date: 2026-10-26 12:00 UTC.
     """
     client = get_db_client()
     return execute_read_cypher(client, query, parameters, limit=limit)

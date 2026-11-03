@@ -1,0 +1,395 @@
+"""
+Node 5: Grounding Validator & Deterministic Hydration Reviewer Node.
+
+1. Reads the researcher's compact ResearcherResponse.
+2. Extracts all {node, id} citations.
+3. Queries Neo4j for full node properties and connected backing messages across all cited entities.
+4. Uses an LLM judge to verify that researcher claims are grounded in retrieved DB truth.
+5. On successful review, deterministically hydrates a final MaritimeAgentResponse using
+   the retrieved KG attributes and backing messages.
+"""
+
+import json
+from typing import Any, Dict, List, Optional
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import ValidationError
+
+from ai_agent.src.utilities.logger import get_logger
+from ai_agent.src.schemas.epistemic import (
+    MaritimeAgentResponse,
+    MessageCitation,
+    EntityDataCitation,
+    Citation,
+)
+from ai_agent.src.schemas.researcher_agent_dto import ResearcherResponse
+from ai_agent.src.schemas.grounding_review_dto import GroundingReview
+from ai_agent.src.agent.state import AgentState
+from ai_agent.src.agent.prompts.prompt_loader import get_agent_prompt
+from ai_agent.src.agent.client.llm_client import get_llm
+from knowledge_graph.database import Neo4jClient
+
+
+logger = get_logger(__name__)
+
+
+FETCH_ALL_CITED_NODES_CYPHER = """
+UNWIND $citations AS citation
+MATCH (n)
+WHERE
+  (citation.node = 'Vessel' AND n:Vessel AND (n.vessel_id = citation.id OR toLower(n.name) = toLower(citation.id)))
+  OR (citation.node = 'Voyage' AND n:Voyage AND n.voyage_id = citation.id)
+  OR (citation.node = 'PortCall' AND n:PortCall AND n.call_id = citation.id)
+  OR (citation.node = 'Incident' AND n:Incident AND n.incident_id = citation.id)
+  OR (citation.node = 'Port' AND n:Port AND n.port_code = citation.id)
+  OR (citation.node = 'Booking' AND n:Booking AND n.booking_id = citation.id)
+  OR (citation.node = 'Customer' AND n:Customer AND n.customer_id = citation.id)
+  OR (citation.node = 'VesselType' AND n:VesselType AND n.type_id = citation.id)
+  OR (citation.node = 'VesselClass' AND n:VesselClass AND n.class_id = citation.id)
+  OR (citation.node = 'TechnicalManager' AND n:TechnicalManager AND n.manager_id = citation.id)
+  OR (citation.node = 'Organization' AND n:Organization AND n.org_id = citation.id)
+  OR (citation.node = 'Message' AND n:Message AND (n.message_id = citation.id OR n.filename = citation.id))
+OPTIONAL MATCH (msg:Message)-[
+  r:ABOUT_VESSEL | ABOUT_VOYAGE | ABOUT_PORT_CALL | ABOUT_CLASS |
+  EVENT_AT_PORT | DESCRIBES_CONGESTION |
+  REPORTS_INCIDENT | CORROBORATES_INCIDENT | REVISES_INCIDENT | CORRECTS_INCIDENT
+]->(n)
+RETURN
+  labels(n)[0] AS node,
+  citation.id AS requested_id,
+  properties(n) AS attributes,
+  collect(DISTINCT {
+    message_id: msg.message_id,
+    filename: msg.filename,
+    message_type: msg.message_type,
+    message_kind: msg.message_kind,
+    trust_tier: msg.trust_tier,
+    sender: msg.sender,
+    recipient: msg.recipient,
+    sent_at_utc: toString(msg.sent_at_utc),
+    subject: msg.subject,
+    cleaned_body: msg.cleaned_body,
+    raw_message: msg.raw_message
+  }) AS backing_messages
+"""
+
+NODE_CANONICAL_NAMES = {
+    "vessel": "Vessel",
+    "voyage": "Voyage",
+    "portcall": "PortCall",
+    "incident": "Incident",
+    "port": "Port",
+    "booking": "Booking",
+    "customer": "Customer",
+    "vesseltype": "VesselType",
+    "vesselclass": "VesselClass",
+    "technicalmanager": "TechnicalManager",
+    "organization": "Organization",
+    "message": "Message",
+}
+
+
+def _extract_all_citations(researcher_response: ResearcherResponse) -> List[Dict[str, str]]:
+    """Extracts unique {node, id} citations from all sections of ResearcherResponse."""
+    citations: List[Dict[str, str]] = []
+    seen = set()
+
+    def add_all(items: List[Any]) -> None:
+        for item in items or []:
+            for citation in getattr(item, "citations", []) or []:
+                node = getattr(citation, "node", None)
+                cid = getattr(citation, "id", None)
+                if node and cid:
+                    canonical_node = NODE_CANONICAL_NAMES.get(str(node).lower(), str(node))
+                    key = (canonical_node, str(cid))
+                    if key not in seen:
+                        seen.add(key)
+                        citations.append({"node": canonical_node, "id": str(cid)})
+
+    add_all(researcher_response.confirmed_facts)
+    add_all(researcher_response.unverified_reports)
+    add_all(researcher_response.system_inferences)
+
+    return citations
+
+
+def fetch_full_ground_truth(citations: List[Dict[str, str]]) -> Dict[str, Any]:
+    """
+    Fetches full node properties and connected backing messages from Neo4j
+    in a single batch query for all cited nodes.
+    """
+    ground_truth: Dict[str, Any] = {
+        "nodes": {}
+    }
+
+    if not citations:
+        return ground_truth
+
+    try:
+        client = Neo4jClient()
+        records = client.execute_read_query(
+            FETCH_ALL_CITED_NODES_CYPHER,
+            parameters={"citations": citations},
+        )
+
+        for record in records:
+            req_id = str(record.get("requested_id"))
+            node_label = record.get("node")
+
+            # Clean backing messages by removing null/empty items produced when OPTIONAL MATCH has no match
+            clean_backing = [
+                msg for msg in record.get("backing_messages", [])
+                if msg and (msg.get("message_id") or msg.get("filename"))
+            ]
+            record["backing_messages"] = clean_backing
+
+            key = f"{node_label}:{req_id}" if node_label else req_id
+            ground_truth["nodes"][key] = record
+
+    except Exception as exc:
+        logger.error("Failed to fetch full ground truth from Neo4j: %s", exc, exc_info=True)
+
+    return ground_truth
+
+
+def _review_response(
+    researcher_response: ResearcherResponse,
+    ground_truth: Dict[str, Any],
+) -> GroundingReview:
+    """Uses an LLM judge to check whether complete researcher claims are grounded in full DB truth."""
+    prompt_config = get_agent_prompt("grounding_validator")
+
+    review_input = f"""
+RESEARCHER RESPONSE:
+{researcher_response.model_dump_json(indent=2)}
+
+COMPLETE NEO4J GROUND TRUTH FOR ALL CITED NODES:
+{json.dumps(ground_truth, indent=2, default=str)}
+
+Validate every claim against the ground truth.
+- A claim is grounded only if the retrieved node attributes or backing messages directly support it.
+- Flag unsupported claims, incorrect dates, wrong statuses, invented entities, or invalid citations.
+- Check whether citations point to nodes that actually exist and contain relevant evidence.
+- If data_available is false, verify that the ground truth does not contain enough data to answer.
+"""
+
+    llm = get_llm(temperature=0.0)
+    judge = llm.with_structured_output(GroundingReview)
+
+    try:
+        res = judge.invoke(
+            [
+                SystemMessage(content=prompt_config["system"]),
+                HumanMessage(content=review_input),
+            ]
+        )
+        if isinstance(res, GroundingReview):
+            return res
+        if isinstance(res, dict):
+            return GroundingReview(**res)
+        return GroundingReview(
+            is_grounded=getattr(res, "is_grounded", False),
+            hallucination_detected=getattr(res, "hallucination_detected", False),
+            feedback_for_agent=getattr(res, "feedback_for_agent", ""),
+        )
+    except Exception as exc:
+        logger.warning("Grounding review failed: %s", exc, exc_info=True)
+        return GroundingReview(
+            is_grounded=False,
+            hallucination_detected=True,
+            feedback_for_agent="Grounding review could not be completed.",
+        )
+
+
+def _retry(
+    researcher_response: ResearcherResponse,
+    review: GroundingReview,
+    state: AgentState,
+    ground_truth: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Handles validation failure retry loop or terminal pass-through if retries exhausted."""
+    validation_retries = state.get("validation_retries", 0)
+
+    if validation_retries < 2:
+        logger.warning(
+            "Grounding validator rejected researcher response; retry %s: %s",
+            validation_retries + 1,
+            review.feedback_for_agent,
+        )
+        return {
+            "validation_status": "FAILED",
+            "validation_feedback": review.feedback_for_agent
+            or "One or more claims were not supported by the knowledge graph.",
+            "validation_retries": validation_retries + 1,
+            "db_ground_truth": ground_truth,
+        }
+
+    logger.warning("Max validation retries reached; concluding response.")
+    if not researcher_response.data_available:
+        final_res = _build_no_data_final_response(researcher_response)
+    else:
+        final_res = _hydrate_maritime_response(researcher_response, ground_truth)
+
+    return {
+        "final_response": final_res,
+        "validation_status": "PASSED",
+        "validation_feedback": None,
+        "db_ground_truth": ground_truth,
+    }
+
+
+def _build_message_citation(
+    message: Dict[str, Any],
+    citation_id: str,
+) -> MessageCitation:
+    """Builds a validated MessageCitation from backing message properties."""
+    return MessageCitation(
+        citation_id=citation_id,
+        filename=message.get("filename") or message.get("message_id") or "",
+        message_type=message.get("message_type") or "Operational message",
+        trust_tier=message.get("trust_tier") or "T2",
+        sender=message.get("sender") or "Unknown",
+        sent_at_utc=message.get("sent_at_utc"),
+        subject=message.get("subject"),
+        raw_message=message.get("raw_message") or message.get("cleaned_body") or "",
+    )
+
+
+def _hydrate_maritime_response(
+    researcher_response: ResearcherResponse,
+    ground_truth: Dict[str, Any],
+) -> MaritimeAgentResponse:
+    """Builds MaritimeAgentResponse using verified KG data and backing messages."""
+    hydrated_citations: List[Citation] = []
+    counter = 1
+
+    for record in ground_truth.get("nodes", {}).values():
+        backing_messages = []
+        for msg in record.get("backing_messages", []) or []:
+            if msg and (msg.get("message_id") or msg.get("filename")):
+                backing_messages.append(
+                    _build_message_citation(msg, f"CIT-{counter:03d}")
+                )
+                counter += 1
+
+        if record.get("node") == "Message":
+            attrs = record.get("attributes", {})
+            hydrated_citations.append(
+                _build_message_citation(attrs, f"CIT-{counter:03d}")
+            )
+        else:
+            hydrated_citations.append(
+                EntityDataCitation(
+                    citation_id=f"CIT-{counter:03d}",
+                    label=record.get("node", "Entity"),
+                    primary_id=str(record.get("requested_id", "")),
+                    attributes=record.get("attributes", {}),
+                    backing_messages=backing_messages,
+                )
+            )
+        counter += 1
+
+    return MaritimeAgentResponse(
+        status="SUCCESS",
+        executive_summary=researcher_response.summary,
+        confirmed_facts=researcher_response.confirmed_facts,
+        unverified_reports=researcher_response.unverified_reports,
+        system_inferences=researcher_response.system_inferences,
+        false_premises_detected=[],
+        citations=hydrated_citations,
+        cypher_queries_executed=[],
+    )
+
+
+def _build_no_data_final_response(
+    researcher_response: ResearcherResponse,
+) -> MaritimeAgentResponse:
+    """Builds a final no-data response without fabricated evidence."""
+    return MaritimeAgentResponse(
+        status="DATA_UNAVAILABLE",
+        executive_summary=researcher_response.summary,
+        confirmed_facts=[],
+        unverified_reports=researcher_response.unverified_reports,
+        system_inferences=[],
+        false_premises_detected=[],
+        citations=[],
+        cypher_queries_executed=[],
+        data_missing_explanation=researcher_response.no_data_explanation,
+    )
+
+
+def validator_and_hydration_node(state: AgentState) -> Dict[str, Any]:
+    """Validates the researcher response against complete KG ground truth and hydrates the final response."""
+    researcher_response = state.get("draft_response")
+
+    if not isinstance(researcher_response, ResearcherResponse):
+        logger.error("Researcher response is missing or has an unexpected type: %s", type(researcher_response))
+        return {
+            "validation_status": "FAILED",
+            "validation_feedback": "Researcher response is missing or invalid.",
+            "validation_retries": state.get("validation_retries", 0) + 1,
+        }
+
+    citations = _extract_all_citations(researcher_response)
+    ground_truth = fetch_full_ground_truth(citations)
+
+    # No-data answer: validate that abstention is reasonable, then return it.
+    if not researcher_response.data_available:
+        review = _review_response(researcher_response, ground_truth)
+
+        if not review.is_grounded or review.hallucination_detected:
+            return _retry(researcher_response, review, state, ground_truth)
+
+        return {
+            "final_response": _build_no_data_final_response(researcher_response),
+            "validation_status": "PASSED",
+            "validation_feedback": None,
+            "db_ground_truth": ground_truth,
+        }
+
+    # Full grounding review against all cited node attributes/messages.
+    review = _review_response(researcher_response, ground_truth)
+
+    if not review.is_grounded or review.hallucination_detected:
+        return _retry(researcher_response, review, state, ground_truth)
+
+    final_response = _hydrate_maritime_response(
+        researcher_response=researcher_response,
+        ground_truth=ground_truth,
+    )
+
+    return {
+        "final_response": final_response,
+        "validation_status": "PASSED",
+        "validation_feedback": None,
+        "db_ground_truth": ground_truth,
+    }
+
+
+# Aliases for backward compatibility and alternate import styles
+reviewer_node = validator_and_hydration_node
+_hydrate_no_data_response = _build_no_data_final_response
+_hydrate_final_response = _hydrate_maritime_response
+_extract_citations = _extract_all_citations
+fetch_ground_truth_from_db = fetch_full_ground_truth
+_review_researcher_response = _review_response
+
+
+__all__ = [
+    "FETCH_ALL_CITED_NODES_CYPHER",
+    "NODE_CANONICAL_NAMES",
+    "_extract_all_citations",
+    "fetch_full_ground_truth",
+    "_review_response",
+    "_retry",
+    "_build_message_citation",
+    "_hydrate_maritime_response",
+    "_build_no_data_final_response",
+    "validator_and_hydration_node",
+    "reviewer_node",
+    "_extract_citations",
+    "fetch_ground_truth_from_db",
+    "_review_researcher_response",
+    "_hydrate_final_response",
+    "_hydrate_no_data_response",
+]

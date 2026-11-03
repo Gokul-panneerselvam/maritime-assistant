@@ -23,6 +23,15 @@ wheels/
 ingestion_report_logs/*.json
 ingestion_report_logs/*.md
 !ingestion_report_logs/.gitkeep
+
+# Databases & Runtime Storage
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+ai_agent/storage/*
+!ai_agent/storage/.gitkeep
+
 .DS_Store
 *.DS_Store
 Thumbs.db

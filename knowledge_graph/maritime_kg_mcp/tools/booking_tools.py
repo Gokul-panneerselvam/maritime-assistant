@@ -63,17 +63,31 @@ def track_booking(
     }
     try:
         results = client.execute_read_query(TRACK_BOOKING_CYPHER, params)
-        return {"success": True, "count": len(results), "bookings": results}
+        if not results:
+            return {
+                "status": "NO_DATA",
+                "message": "NO_DATA_FOUND: No freight bookings matched the specified search criteria.",
+                "count": 0,
+                "bookings": []
+            }
+        return {"status": "SUCCESS", "success": True, "count": len(results), "bookings": results}
     except Exception as e:
         logger.error("Error tracking booking: %s", e)
-        return {"success": False, "error": str(e), "bookings": []}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "message": "NO_DATA_FOUND due to query error.", "count": 0, "bookings": []}
 
 def get_rolled_bookings(client: Neo4jClient, limit: int = 50) -> Dict[str, Any]:
     """Retrieves all container shipments that were rolled to later sailings."""
     try:
         results = client.execute_read_query(GET_ROLLED_BOOKINGS_CYPHER, {"limit": min(limit, 100)})
-        return {"success": True, "count": len(results), "rolled_bookings": results}
+        if not results:
+            return {
+                "status": "NO_DATA",
+                "message": "NO_DATA_FOUND: No rolled bookings found in the Maritime Knowledge Graph.",
+                "count": 0,
+                "rolled_bookings": []
+            }
+        return {"status": "SUCCESS", "success": True, "count": len(results), "rolled_bookings": results}
     except Exception as e:
         logger.error("Error getting rolled bookings: %s", e)
-        return {"success": False, "error": str(e), "rolled_bookings": []}
+        return {"status": "NO_DATA", "success": False, "error": str(e), "message": "NO_DATA_FOUND due to query error.", "count": 0, "rolled_bookings": []}
 
