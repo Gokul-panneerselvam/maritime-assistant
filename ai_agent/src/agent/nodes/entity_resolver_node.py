@@ -61,7 +61,7 @@ def run_entity_resolution_llm(
                         Do not provide answer options.
                         """
 
-    llm = get_llm(temperature=0.0)
+    llm = get_llm(temperature=1)
     structured_llm = llm.with_structured_output(EntityResolutionResponse)
 
     try:

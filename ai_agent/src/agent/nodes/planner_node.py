@@ -64,7 +64,7 @@ def planner_node(state: AgentState) -> Dict[str, Any]:
                         Using the Knowledge Graph schema and operational guidelines provided in the system prompt, generate a descriptive data research plan to instruct the researcher agent on what data, nodes, relationships, and backing records need to be checked to answer this query thoroughly and accurately.
                         """
 
-    llm = get_llm(temperature=0.0)
+    llm = get_llm(temperature=1)
 
     try:
         # The research planner system prompt explicitly instructs:
@@ -93,8 +93,10 @@ def planner_node(state: AgentState) -> Dict[str, Any]:
         fallback_plan = (
             f"RESEARCH PLAN (FALLBACK):\n"
             f"Analyze query: '{normalized_query}'.\n"
-            f"Check entities: {json.dumps(resolved_entities)} in Knowledge Graph.\n"
-            f"Query relevant Vessel, Voyage, PortCall, Incident, and Congestion nodes along with backing Message records."
+            f"Check entities: {json.dumps(resolved_entities)} using Maritime Knowledge Graph domain tools.\n"
+            f"Use get_voyage_context for voyage/delay issues, get_vessel_context for vessel status, "
+            f"get_port_context for congestion, search_incident_history for fault recurrences, "
+            f"get_cargo_exposure for containers/bookings, and search_messages for operational communications."
         )
         return {
             "research_plan": fallback_plan

@@ -9,7 +9,13 @@ import { Thread, ChatMessage, Citation, UserProfile, MaritimeAgentResponse } fro
 
 export const App: React.FC = () => {
   // Authentication & User State
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>({
+    user_id: 'user_ops_lead',
+    username: 'gokul',
+    full_name: 'Gokul Panneer Selvam',
+    email: 'gokul@maritime-ops.com',
+    role: 'Fleet Operations Director',
+  });
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // Connectivity State
@@ -242,7 +248,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-ocean-950 text-slate-100 font-sans">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#e8f2fa] text-slate-800 font-sans">
       {/* Top Navbar */}
       <Navbar
         user={user}

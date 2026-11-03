@@ -1,10 +1,10 @@
-import logging
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
-from knowledge_graph.database import Neo4jClient
+from utility.dependencies import DatabaseClientProtocol
+from utility.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Strict regex to ensure labels and relationship types are safe against Cypher injection
 IDENTIFIER_REGEX = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -211,7 +211,7 @@ def _separate_props(label: str, props: Dict[str, Any]) -> Tuple[Dict[str, Any], 
     return regular_props, datetime_props
 
 def _create_single_node(
-    client: Neo4jClient,
+    client: DatabaseClientProtocol,
     label: str,
     properties: Dict[str, Any],
     edges: Optional[List[Dict[str, Any]]] = None
@@ -394,7 +394,7 @@ def _create_single_node(
     }
 
 def create_nodes(
-    client: Neo4jClient,
+    client: DatabaseClientProtocol,
     label: Optional[str] = None,
     properties: Optional[Dict[str, Any]] = None,
     edges: Optional[List[Dict[str, Any]]] = None,
@@ -445,7 +445,7 @@ def create_nodes(
     return _create_single_node(client, label, properties, edges)
 
 def _update_single_node(
-    client: Neo4jClient,
+    client: DatabaseClientProtocol,
     label: str,
     key_value: Any,
     key_field: Optional[str] = None,
@@ -635,7 +635,7 @@ def _update_single_node(
     }
 
 def update_nodes(
-    client: Neo4jClient,
+    client: DatabaseClientProtocol,
     label: Optional[str] = None,
     key_value: Optional[Any] = None,
     key_field: Optional[str] = None,

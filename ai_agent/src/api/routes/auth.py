@@ -22,16 +22,47 @@ class UserProfile(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(description="Unique username for the operator.", min_length=3)
-    email: str = Field(description="Corporate email address.")
-    password: str = Field(description="Plain text password to be hashed using PBKDF2-SHA256.", min_length=6)
-    full_name: str = Field(description="Operator full legal or display name.")
-    role: Optional[str] = Field(default="fleet_dispatcher", description="Operational role assignment.")
+    username: str = Field(description="Unique username for the operator.", min_length=3, examples=["gokul_ops"])
+    email: str = Field(description="Corporate email address.", examples=["gokul@nautilus-maritime.ai"])
+    password: str = Field(description="Plain text password to be hashed using PBKDF2-SHA256.", min_length=6, examples=["SecurePass123!"])
+    full_name: str = Field(description="Operator full legal or display name.", examples=["Gokul Panneer Selvam"])
+    role: Optional[str] = Field(
+        default="fleet_dispatcher",
+        description="Operational role assignment: 'fleet_dispatcher', 'port_captain', or 'cargo_superintendent'.",
+        examples=["fleet_dispatcher"]
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "gokul_ops",
+                "email": "gokul@nautilus-maritime.ai",
+                "password": "SecurePass123!",
+                "full_name": "Gokul Panneer Selvam",
+                "role": "fleet_dispatcher"
+            }
+        }
+    }
 
 
 class LoginRequest(BaseModel):
-    username_or_email: str = Field(description="Registered username or email address.")
-    password: str = Field(description="Account password.")
+    username_or_email: str = Field(
+        description="Registered operator username or corporate email address.",
+        examples=["gokul@nautilus-maritime.ai"]
+    )
+    password: str = Field(
+        description="Account password.",
+        examples=["SecurePass123!"]
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username_or_email": "gokul@nautilus-maritime.ai",
+                "password": "SecurePass123!"
+            }
+        }
+    }
 
 
 class AuthResponse(BaseModel):

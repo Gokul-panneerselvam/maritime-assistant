@@ -25,6 +25,24 @@ STORAGE_DIR = (Path(__file__).resolve().parents[3] / "storage").resolve()
 CHECKPOINT_DB_PATH = STORAGE_DIR / "checkpoints.db"
 
 
+def _sanitize_for_msgpack(obj: Any) -> Any:
+    """Recursively converts non-msgpack serializable types (Neo4j DateTime/Date) to strings/primitives."""
+    if obj is None:
+        return None
+    if hasattr(obj, "to_native"):
+        native = obj.to_native()
+        if hasattr(native, "isoformat"):
+            return native.isoformat()
+        return str(native)
+    if hasattr(obj, "isoformat"):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_for_msgpack(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_sanitize_for_msgpack(item) for item in obj]
+    return obj
+
+
 class AsyncSqliteCheckpointer(BaseCheckpointSaver[str]):
     """
     Asynchronous SQLite checkpointer proxy for LangGraph.
@@ -66,7 +84,10 @@ class AsyncSqliteCheckpointer(BaseCheckpointSaver[str]):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         saver = await self._get_saver()
-        return await saver.aput(config, checkpoint, metadata, new_versions)
+        sanitized_cp = dict(checkpoint)
+        if "channel_values" in sanitized_cp:
+            sanitized_cp["channel_values"] = _sanitize_for_msgpack(sanitized_cp["channel_values"])
+        return await saver.aput(config, sanitized_cp, metadata, new_versions)
 
     async def aput_writes(
         self,
@@ -76,7 +97,8 @@ class AsyncSqliteCheckpointer(BaseCheckpointSaver[str]):
         task_path: str = "",
     ) -> None:
         saver = await self._get_saver()
-        return await saver.aput_writes(config, writes, task_id, task_path)
+        sanitized_writes = [(k, _sanitize_for_msgpack(v)) for k, v in writes]
+        return await saver.aput_writes(config, sanitized_writes, task_id, task_path)
 
     async def alist(
         self,
@@ -111,7 +133,10 @@ class AsyncSqliteCheckpointer(BaseCheckpointSaver[str]):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         if self._saver is not None:
-            return self._saver.put(config, checkpoint, metadata, new_versions)
+            sanitized_cp = dict(checkpoint)
+            if "channel_values" in sanitized_cp:
+                sanitized_cp["channel_values"] = _sanitize_for_msgpack(sanitized_cp["channel_values"])
+            return self._saver.put(config, sanitized_cp, metadata, new_versions)
         return config
 
     def put_writes(
@@ -122,7 +147,8 @@ class AsyncSqliteCheckpointer(BaseCheckpointSaver[str]):
         task_path: str = "",
     ) -> None:
         if self._saver is not None:
-            self._saver.put_writes(config, writes, task_id, task_path)
+            sanitized_writes = [(k, _sanitize_for_msgpack(v)) for k, v in writes]
+            self._saver.put_writes(config, sanitized_writes, task_id, task_path)
 
     def list(
         self,

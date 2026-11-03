@@ -1,9 +1,15 @@
-import logging
-from typing import Any, Dict, Optional
-from knowledge_graph.database import Neo4jClient
-from knowledge_graph.maritime_kg_mcp.security import validate_read_only_cypher, enforce_query_limit
+"""Cypher execution tool for Maritime Knowledge Graph.
+Executes validated read-only Cypher queries with row limits and type serialization.
+"""
 
-logger = logging.getLogger(__name__)
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+from utility.dependencies import DatabaseClientProtocol
+from utility.logger import get_logger
+from knowledge_graph.maritime_kg_mcp.security import enforce_query_limit, validate_read_only_cypher
+
+logger = get_logger(__name__)
 
 
 def serialize_neo4j_data(data: Any) -> Any:
@@ -26,15 +32,14 @@ def serialize_neo4j_data(data: Any) -> Any:
 
 
 def execute_read_cypher(
-    client: Neo4jClient,
+    client: DatabaseClientProtocol,
     query: str,
     parameters: Optional[Dict[str, Any]] = None,
     limit: int = 100
 ) -> Dict[str, Any]:
-    """
-    Executes a validated read-only Cypher query against the Maritime Knowledge Graph.
+    """Executes a validated read-only Cypher query against the Maritime Knowledge Graph.
     Blocks any modifying operations (CREATE, MERGE, SET, DELETE, DROP, etc.).
-    Sanitizes all Neo4j data types (e.g. neo4j.time.DateTime) into JSON-serializable types.
+    Sanitizes all Neo4j data types into JSON-serializable types.
     """
     is_valid, error_msg = validate_read_only_cypher(query)
     if not is_valid:

@@ -8,7 +8,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
-  const [username, setUsername] = useState('maritime_lead');
+  const [username, setUsername] = useState('gokul');
   const [password, setPassword] = useState('MaritimeOps2026!');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,51 +31,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
   };
 
   const handleUseDemo = () => {
-    setUsername('maritime_lead');
+    setUsername('gokul');
     setPassword('MaritimeOps2026!');
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-ocean-900 border border-ocean-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <div className="fixed inset-0 bg-sky-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-white border border-sky-200 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
         <div className="text-center mb-6">
-          <div className="inline-flex p-3 rounded-2xl bg-cyan-950 border border-cyan-800 text-cyan-400 mb-3 shadow-lg shadow-cyan-900/30">
+          <div className="inline-flex p-3.5 rounded-2xl bg-gradient-to-tr from-sky-50 to-teal-50 border border-sky-200 text-teal-600 mb-3 shadow-xs">
             <Ship className="w-8 h-8" />
           </div>
-          <h2 className="text-lg font-bold text-white tracking-wide">Maritime Operations Portal</h2>
-          <p className="text-xs text-slate-400 mt-1">Authenticate to access the Maritime Knowledge Graph & Agent</p>
+          <h2 className="text-lg font-bold text-sky-950 tracking-wide">Maritime Operations Portal</h2>
+          <p className="text-xs text-slate-500 mt-1">Authenticate to access Fleet Operations Control & Intelligence</p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-rose-950/60 border border-rose-800/80 rounded-lg text-rose-300 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             <span className="leading-relaxed">{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block text-slate-300 font-medium mb-1 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-cyan-400" /> Username / Email
+            <label className="block text-slate-700 font-medium mb-1 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-teal-600" /> Username / Email
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-ocean-800 border border-ocean-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full bg-[#f4f9fd] border border-sky-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:bg-white"
               required
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-cyan-400" /> Password
+            <label className="block text-slate-700 font-medium mb-1 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-teal-600" /> Password
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-ocean-800 border border-ocean-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full bg-[#f4f9fd] border border-sky-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:bg-white"
               required
             />
           </div>
@@ -83,7 +83,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition shadow-lg shadow-cyan-900/40 text-xs flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-sky-600 to-teal-600 hover:from-sky-700 hover:to-teal-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-xl transition shadow-xs text-xs flex items-center justify-center gap-2"
           >
             {loading ? (
               <span>Authenticating...</span>
@@ -96,11 +96,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
           </button>
         </form>
 
-        <div className="mt-5 pt-4 border-t border-ocean-800 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Demo Account: <strong className="text-cyan-300">maritime_lead</strong></span>
+        <div className="mt-5 pt-4 border-t border-sky-100 flex items-center justify-between text-[11px] text-slate-500">
+          <span>Demo Operator: <strong className="text-teal-800 font-semibold">Gokul Panneer Selvam (gokul)</strong></span>
           <button
             onClick={handleUseDemo}
-            className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+            className="text-teal-700 hover:text-teal-800 underline underline-offset-2 font-semibold"
           >
             Auto-fill
           </button>
@@ -109,4 +109,3 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
     </div>
   );
 };
-

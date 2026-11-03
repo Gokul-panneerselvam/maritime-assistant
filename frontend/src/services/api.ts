@@ -27,7 +27,7 @@ function getAuthHeader(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs = 90000): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs = 1800000): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
@@ -66,11 +66,11 @@ async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error('Request timed out. The operational query took longer than 90s to complete.');
+      throw new Error('Request timed out. The operational query took longer than 30 minutes to complete.');
     }
     if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
       throw new Error(
-        `Cannot connect to backend at ${baseUrl || 'current host'}. Make sure the FastAPI server is running with: uv run uvicorn ai_agent.api.main:app --port 8080`
+        `Cannot connect to backend operations server at ${baseUrl || 'current host'}. Make sure the backend server is running.`
       );
     }
     throw err;
@@ -121,10 +121,14 @@ export const api = {
     message: string,
     threadId: string | null = null
   ): Promise<{ thread_id: string; response: MaritimeAgentResponse; is_interrupted: boolean }> {
-    return request<{ thread_id: string; response: MaritimeAgentResponse; is_interrupted: boolean }>('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({ thread_id: threadId, message }),
-    });
+    return request<{ thread_id: string; response: MaritimeAgentResponse; is_interrupted: boolean }>(
+      '/api/chat',
+      {
+        method: 'POST',
+        body: JSON.stringify({ thread_id: threadId, message }),
+      },
+      1800000
+    );
   },
 
   async submitClarification(

@@ -243,19 +243,38 @@ class LLMClient:
             endpoint = (
                 os.getenv("AZURE_ENDPOINT")
                 or os.getenv("AZURE_OPENAI_ENDPOINT")
-                or "https://gokulpannerselvam02-631-resource.services.ai.azure.com/openai/v1"
             ).strip().strip("'\"")
 
-            max_tokens = int(os.getenv("AZURE_MAX_TOKENS", os.getenv("MAX_TOKENS", "4096")))
+            max_tokens = int(os.getenv("AZURE_MAX_TOKENS", os.getenv("MAX_TOKENS", "8192")))
 
-            logger.info("Configured Azure AI LLM: %s at %s (max_tokens: %d)", target_model, endpoint, max_tokens)
-            return ChatOpenAI(
-                model=target_model,
-                openai_api_key=azure_key,
-                openai_api_base=endpoint,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            # Check if environment specifies a temperature override or if target model
+            # is a reasoning/preview model (e.g. gpt-6-luna, o1, o3) where temperature=0.0 is unsupported.
+            env_temp = os.getenv("AZURE_TEMPERATURE", os.getenv("LLM_TEMPERATURE"))
+            target_temp = temperature
+            if env_temp is not None and env_temp.strip():
+                if env_temp.strip().lower() in ("none", "null", "default", "omit"):
+                    target_temp = None
+                else:
+                    try:
+                        target_temp = float(env_temp.strip())
+                    except ValueError:
+                        target_temp = None
+            else:
+                # Models like gpt-6-luna, o1, o3 only support default (1) or omitting temperature
+                if any(x in target_model.lower() for x in ("luna", "o1", "o3", "reasoning", "preview")):
+                    target_temp = None
+
+            llm_kwargs = {
+                "model": target_model,
+                "openai_api_key": azure_key,
+                "openai_api_base": endpoint,
+                "max_tokens": max_tokens,
+            }
+            if target_temp is not None:
+                llm_kwargs["temperature"] = target_temp
+
+            logger.info("Configured Azure AI LLM: %s at %s (max_tokens: %d, temperature: %s)", target_model, endpoint, max_tokens, target_temp)
+            return ChatOpenAI(**llm_kwargs)
         except Exception as e:
             logger.error("Failed to configure Azure LLM: %s", e, exc_info=True)
             return None

@@ -1,8 +1,14 @@
-import logging
-from typing import Any, Dict
-from knowledge_graph.database import Neo4jClient
+"""Operational summary tool for Maritime Knowledge Graph.
+Computes high-level KPI metrics across the fleet, voyages, and cargo.
+"""
 
-logger = logging.getLogger(__name__)
+from __future__ import annotations
+
+from typing import Any, Dict
+from utility.dependencies import DatabaseClientProtocol
+from utility.logger import get_logger
+
+logger = get_logger(__name__)
 
 SUMMARY_CYPHER = """
 CALL {
@@ -22,7 +28,8 @@ CALL {
 RETURN total_vessels, total_voyages, delayed_voyages, total_incidents, total_bookings, rolled_bookings
 """
 
-def get_operational_summary(client: Neo4jClient) -> Dict[str, Any]:
+
+def get_operational_summary(client: DatabaseClientProtocol) -> Dict[str, Any]:
     """Retrieves high-level operational metrics across fleet, voyages, delays, and incidents."""
     try:
         results = client.execute_read_query(SUMMARY_CYPHER)
@@ -50,4 +57,3 @@ def get_operational_summary(client: Neo4jClient) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Error getting operational summary: %s", e)
         return {"status": "NO_DATA", "success": False, "error": str(e), "metrics": None}
-

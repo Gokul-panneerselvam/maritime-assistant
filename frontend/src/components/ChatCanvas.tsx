@@ -1,8 +1,9 @@
 import React, { useRef, useEffect } from 'react';
-import { Send, Shield, AlertTriangle, Lightbulb, Loader2, Sparkles, Ship } from 'lucide-react';
+import { Send, Sparkles, Ship } from 'lucide-react';
 import { marked } from 'marked';
-import { ChatMessage, MaritimeAgentResponse } from '../types/maritime';
+import { ChatMessage } from '../types/maritime';
 import { EpistemicCards } from './EpistemicCards';
+import { OperationalLoader } from './OperationalLoader';
 
 interface ChatCanvasProps {
   messages: ChatMessage[];
@@ -39,55 +40,55 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-ocean-950 overflow-hidden relative">
+    <main className="flex-1 flex flex-col bg-[#e8f2fa] overflow-hidden relative">
       {/* Messages Stream */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {messages.length === 0 ? (
           /* Welcome Banner */
-          <div className="max-w-2xl mx-auto my-10 text-center p-8 rounded-2xl bg-ocean-900/60 border border-ocean-700/80 shadow-2xl">
-            <div className="inline-flex p-3 rounded-2xl bg-cyan-950 border border-cyan-800 text-cyan-400 mb-4 shadow-lg shadow-cyan-950/50">
+          <div className="max-w-2xl mx-auto my-10 text-center p-8 rounded-3xl bg-white border border-sky-200/80 shadow-md">
+            <div className="inline-flex p-3.5 rounded-2xl bg-gradient-to-tr from-sky-100 to-teal-100 border border-sky-200 text-teal-700 mb-4 shadow-xs">
               <Ship className="w-8 h-8" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Maritime Operations Reasoning Agent</h2>
-            <p className="text-xs text-slate-300 mb-6 max-w-lg mx-auto leading-relaxed">
-              Autonomous fleet intelligence connected to the Maritime Knowledge Graph via FastMCP.
+            <h2 className="text-xl font-bold text-sky-950 mb-2">Maritime Operations Reasoning Agent</h2>
+            <p className="text-xs text-slate-600 mb-6 max-w-lg mx-auto leading-relaxed">
+              Autonomous fleet intelligence connected to the Maritime Knowledge Graph.
               Answers strictly enforce 3-way epistemic segregation to eliminate hallucination.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left text-xs mb-6">
-              <div className="p-3 rounded-lg bg-ocean-800/60 border border-ocean-700/80">
-                <span className="font-semibold text-emerald-400 flex items-center gap-1.5 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" /> Confirmed Facts
+              <div className="p-3.5 rounded-2xl bg-teal-50/70 border border-teal-200/90 shadow-2xs">
+                <span className="font-semibold text-teal-800 flex items-center gap-1.5 mb-1 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-teal-500" /> Confirmed Facts
                 </span>
-                <p className="text-[11px] text-slate-400">
-                  Verified tabular data (status = 'Confirmed') & T1/T2 master reports.
+                <p className="text-[11px] text-teal-950/80 leading-relaxed">
+                  Verified tabular data (status = 'Confirmed') & master reports.
                 </p>
               </div>
 
-              <div className="p-3 rounded-lg bg-ocean-800/60 border border-ocean-700/80">
-                <span className="font-semibold text-amber-400 flex items-center gap-1.5 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" /> Unverified Reports
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/90 shadow-2xs">
+                <span className="font-semibold text-amber-800 flex items-center gap-1.5 mb-1 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" /> Unverified Reports
                 </span>
-                <p className="text-[11px] text-slate-400">
-                  Crew WhatsApp relays (T3/T4) & pending uncorroborated alerts.
+                <p className="text-[11px] text-amber-950/80 leading-relaxed">
+                  Crew operational relays & pending uncorroborated alerts.
                 </p>
               </div>
 
-              <div className="p-3 rounded-lg bg-ocean-800/60 border border-ocean-700/80">
-                <span className="font-semibold text-purple-400 flex items-center gap-1.5 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-purple-400" /> System Inferences
+              <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200/90 shadow-2xs">
+                <span className="font-semibold text-sky-800 flex items-center gap-1.5 mb-1 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-sky-500" /> System Inferences
                 </span>
-                <p className="text-[11px] text-slate-400">
-                  ETA projections, container miss risk, & causality deduction models.
+                <p className="text-[11px] text-sky-950/80 leading-relaxed">
+                  ETA projections, container miss risk, & causality models.
                 </p>
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-400 border-t border-ocean-800 pt-4 flex flex-wrap justify-center gap-2">
-              <span className="text-slate-400">Try asking:</span>
+            <div className="text-[11px] text-sky-900/70 border-t border-sky-100 pt-4 flex flex-wrap justify-center gap-2">
+              <span>Try asking:</span>
               <button
                 onClick={() => onSamplePromptClick('Why was Voyage VG-1042 delayed in Singapore?')}
-                className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                className="text-teal-700 hover:text-teal-800 underline underline-offset-2 font-semibold"
               >
                 Why was Voyage VG-1042 delayed in Singapore?
               </button>
@@ -100,25 +101,25 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
               className={`flex gap-3 text-sm ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-400 border border-sky-400 flex items-center justify-center shrink-0 text-white shadow-md shadow-cyan-900/40">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-600 via-teal-600 to-teal-500 border border-sky-300 flex items-center justify-center shrink-0 text-white shadow-xs">
                   <Sparkles className="w-4 h-4" />
                 </div>
               )}
 
               <div
-                className={`max-w-3xl rounded-2xl p-4 shadow-md ${
+                className={`max-w-3xl rounded-3xl shadow-sm break-words overflow-hidden ${
                   msg.role === 'user'
-                    ? 'bg-ocean-800 text-slate-100 rounded-tr-sm border border-ocean-700'
-                    : 'bg-ocean-900/90 text-slate-200 rounded-tl-sm border border-ocean-700/80 w-full'
+                    ? 'bg-gradient-to-r from-sky-600 to-teal-700 text-white rounded-tr-xs px-5 py-3.5 max-w-2xl'
+                    : 'bg-white text-slate-800 rounded-tl-xs border border-sky-200/90 w-full p-6 sm:p-7'
                 }`}
               >
                 {msg.role === 'user' ? (
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-xs leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                 ) : (
                   <div>
                     {/* Executive Summary Markdown */}
                     <div
-                      className="prose-maritime text-xs leading-relaxed"
+                      className="prose-maritime text-xs leading-relaxed max-w-none break-words"
                       dangerouslySetInnerHTML={{
                         __html: marked.parse(msg.content || ''),
                       }}
@@ -137,37 +138,22 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
               </div>
 
               {msg.role === 'user' && (
-                <div className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center shrink-0 text-xs font-bold text-slate-300">
-                  U
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-200 to-teal-200 border border-sky-300 flex items-center justify-center shrink-0 text-xs font-bold text-sky-900 shadow-2xs">
+                  GP
                 </div>
               )}
             </div>
           ))
         )}
 
-        {/* Loading Indicator */}
-        {loading && (
-          <div className="flex gap-3 text-sm items-start">
-            <div className="w-8 h-8 rounded-full bg-cyan-950 border border-cyan-800 flex items-center justify-center shrink-0 text-cyan-400">
-              <Loader2 className="w-4 h-4 animate-spin" />
-            </div>
-            <div className="bg-ocean-900/90 rounded-2xl rounded-tl-sm border border-ocean-700 p-4 max-w-lg shadow-md space-y-2">
-              <div className="flex items-center gap-2 text-cyan-300 text-xs font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Traversing Maritime Knowledge Graph & validating ground truth...</span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Executing read-only Cypher queries over FastMCP stdio transport and applying 5-layer epistemic guardrails.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Dynamic Maritime Operational Loader */}
+        {loading && <OperationalLoader />}
 
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input Bar */}
-      <div className="p-4 bg-ocean-900/95 border-t border-ocean-700/60 shrink-0">
+      <div className="p-4 bg-white/95 backdrop-blur-md border-t border-sky-200/90 shrink-0 shadow-xs">
         <form onSubmit={onSendMessage} className="max-w-4xl mx-auto flex items-end gap-3">
           <div className="flex-1 relative">
             <textarea
@@ -175,14 +161,14 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
               onChange={(e) => onInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={2}
-              placeholder="Ask an operational question (e.g. 'What caused the delay of MV Ocean Star on Voyage 1042?')..."
-              className="w-full bg-ocean-800/90 text-slate-100 placeholder-slate-400 text-xs rounded-xl px-4 py-2.5 border border-ocean-700 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 resize-none"
+              placeholder="Ask an operational inquiry (e.g. 'What caused the delay of MV Ocean Star on Voyage 1042?')..."
+              className="w-full bg-[#f4f9fd] text-slate-900 placeholder-slate-400 text-xs rounded-2xl px-5 py-3.5 border border-sky-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:bg-white resize-none transition shadow-2xs leading-relaxed min-h-[56px]"
             />
           </div>
           <button
             type="submit"
             disabled={loading || !inputText.trim()}
-            className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-medium p-3 rounded-xl shadow-lg shadow-cyan-900/40 transition flex items-center justify-center shrink-0"
+            className="bg-gradient-to-r from-sky-600 to-teal-600 hover:from-sky-700 hover:to-teal-700 disabled:opacity-40 text-white font-medium p-3.5 rounded-2xl shadow-xs transition flex items-center justify-center shrink-0"
             title="Send Inquiry"
           >
             <Send className="w-4 h-4" />
@@ -192,4 +178,3 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
     </main>
   );
 };
-

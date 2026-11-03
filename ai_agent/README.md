@@ -20,10 +20,11 @@ flowchart TD
     N2 -->|Ambiguous Reference| Clarify["Clarification Required<br/>(status: CLARIFICATION_NEEDED)"]
     N2 -->|Resolved| N3["Node 3: Data Research Planner<br/>• Analyzes query intent<br/>• Formulates structured research plan<br/>• Identifies target nodes & relationship paths"]
     
-    N3 --> N4["Node 4: Researcher ReAct Agent<br/>• Connected to FastMCP server over HTTP<br/>• Executes read-only Cypher queries<br/>• Strict no-data escape hatch"]
+    N3 --> N4["Node 4: Researcher ReAct Agent<br/>• Connected to FastMCP server over HTTP<br/>• Uses specialized domain context tools<br/>• Strict no-data escape hatch"]
     
-    N4 --> N5["Node 5: Epistemic Reviewer & Hydration<br/>• Batch-fetches cited nodes & backing messages<br/>• LLM Judge compares claims against DB ground truth<br/>• Deterministically hydrates citations"]
+    N5["Node 5: Epistemic Reviewer & Hydration<br/>• Batch-fetches cited nodes & backing messages<br/>• Deterministic graph existence verification<br/>• Deterministically hydrates citations"]
     
+    N4 --> N5
     N5 -->|Hallucination / Unsupported| N4
     N5 -->|Verified Ground Truth| Final["Final MaritimeAgentResponse"]
 ```
@@ -35,17 +36,17 @@ flowchart TD
    - Defends against adversarial prompt injections and jailbreak attempts.
 2. **`node_2_resolver` ([`entity_resolver_node.py`](file:///ai_agent/src/agent/nodes/entity_resolver_node.py))**:
    - Standardizes temporal references (e.g., "last Tuesday", "yesterday noon") against snapshot timestamps into ISO 8601 UTC.
-   - Detects ambiguous entity references (e.g., "the Atlas ship") and returns a clean clarification question without guessing.
+   - Detects ambiguous entity references (e.g., "the Atlas ship") and returns a clean clarification question through an isolated clarification channel.
 3. **`node_3_planner` ([`planner_node.py`](file:///ai_agent/src/agent/nodes/planner_node.py))**:
    - Generates a structured research plan (`summary_of_intent`, `target_entities`, `relevant_kg_nodes`, `relevant_relationships`, `data_points_to_check`).
    - Renders the plan directly into the researcher agent's system prompt.
 4. **`node_4_researcher` ([`researcher_node.py`](file:///ai_agent/src/agent/nodes/researcher_node.py))**:
    - Connects to the Maritime FastMCP Server over Streamable HTTP (`MARITIME_MCP_SERVER_URL`).
-   - Exclusively uses the read-only query tool (`execute_read_query`).
+   - Exclusively uses specialized domain tools (`get_vessel_context`, `get_voyage_context`, `scan_voyages`, `get_port_context`, `search_incident_history`, `get_cargo_exposure`, `track_booking`, `search_messages`, `get_knowledge_graph_schema`). Raw Cypher and mutation tools are excluded.
    - Produces compact structured output (`ResearcherResponse`) containing claims and citations `{node, id}`, or signals `data_available=false` with `no_data_reason`.
 5. **`node_5_validator` ([`reviewer_node.py`](file:///ai_agent/src/agent/nodes/reviewer_node.py))**:
-   - Batch-fetches full attributes and connected backing messages across all 12 KG node types using a single Cypher query (`UNWIND $citations AS citation`).
-   - Runs an LLM Judge to ensure every claim is grounded in the retrieved database records.
+   - Batch-fetches full attributes and connected backing messages across all KG node types using a single Cypher query (`UNWIND $citations AS citation`).
+   - Runs deterministic existence verification against Neo4j database records.
    - On review pass, deterministically hydrates verified node properties and message bodies into the final `MaritimeAgentResponse`.
    - On review failure, routes back to `node_4_researcher` with targeted critique (up to 2 retries).
 
@@ -65,10 +66,11 @@ Every response is structured to maintain strict epistemic rigor:
 
 ---
 
-## 3. Swagger & OpenAPI Documentation
+## 3. Swagger & Documentation
 
-Interactive and machine-readable API documentation is available out-of-the-box:
+Interactive, architectural, and machine-readable API documentation is available:
 
+- **Graph Architecture & Design**: [`ai_agent/docs/DESIGN.md`](file:///ai_agent/docs/DESIGN.md)
 - **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - **Static OpenAPI JSON**: [`ai_agent/docs/openapi.json`](file:///ai_agent/docs/openapi.json)

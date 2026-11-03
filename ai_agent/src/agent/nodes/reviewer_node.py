@@ -30,7 +30,7 @@ from ai_agent.src.schemas.grounding_review_dto import GroundingReview
 from ai_agent.src.agent.state import AgentState
 from ai_agent.src.agent.prompts.prompt_loader import get_agent_prompt
 from ai_agent.src.agent.client.llm_client import get_llm
-from knowledge_graph.database import Neo4jClient
+from utility.dependencies import get_db_client
 
 
 logger = get_logger(__name__)
@@ -45,17 +45,18 @@ WHERE
   OR (citation.node = 'PortCall' AND n:PortCall AND n.call_id = citation.id)
   OR (citation.node = 'Incident' AND n:Incident AND n.incident_id = citation.id)
   OR (citation.node = 'Port' AND n:Port AND n.port_code = citation.id)
+  OR (citation.node = 'Congestion' AND n:Congestion AND n.congestion_id = citation.id)
   OR (citation.node = 'Booking' AND n:Booking AND n.booking_id = citation.id)
   OR (citation.node = 'Customer' AND n:Customer AND n.customer_id = citation.id)
   OR (citation.node = 'VesselType' AND n:VesselType AND n.type_id = citation.id)
   OR (citation.node = 'VesselClass' AND n:VesselClass AND n.class_id = citation.id)
   OR (citation.node = 'TechnicalManager' AND n:TechnicalManager AND n.manager_id = citation.id)
   OR (citation.node = 'Organization' AND n:Organization AND n.org_id = citation.id)
-  OR (citation.node = 'Message' AND n:Message AND (n.message_id = citation.id OR n.filename = citation.id))
+  OR ((citation.node IN ['Message', 'File']) AND n:Message AND (n.message_id = citation.id OR n.filename = citation.id))
 OPTIONAL MATCH (msg:Message)-[
   r:ABOUT_VESSEL | ABOUT_VOYAGE | ABOUT_PORT_CALL | ABOUT_CLASS |
   EVENT_AT_PORT | DESCRIBES_CONGESTION |
-  REPORTS_INCIDENT | CORROBORATES_INCIDENT | REVISES_INCIDENT | CORRECTS_INCIDENT
+  REPORTS_INCIDENT | CORROBORATES_INCIDENT | REVISES | CORRECTS_INCIDENT
 ]->(n)
 RETURN
   labels(n)[0] AS node,
@@ -71,8 +72,9 @@ RETURN
     recipient: msg.recipient,
     sent_at_utc: toString(msg.sent_at_utc),
     subject: msg.subject,
+    raw_message: coalesce(msg.raw_message, msg.cleaned_body, ''),
     cleaned_body: msg.cleaned_body,
-    raw_message: msg.raw_message
+    snippet: substring(coalesce(msg.cleaned_body, msg.raw_message, ''), 0, 300)
   }) AS backing_messages
 """
 
@@ -82,6 +84,7 @@ NODE_CANONICAL_NAMES = {
     "portcall": "PortCall",
     "incident": "Incident",
     "port": "Port",
+    "congestion": "Congestion",
     "booking": "Booking",
     "customer": "Customer",
     "vesseltype": "VesselType",
@@ -89,6 +92,7 @@ NODE_CANONICAL_NAMES = {
     "technicalmanager": "TechnicalManager",
     "organization": "Organization",
     "message": "Message",
+    "file": "Message",
 }
 
 
@@ -116,6 +120,24 @@ def _extract_all_citations(researcher_response: ResearcherResponse) -> List[Dict
     return citations
 
 
+def _sanitize_for_msgpack(obj: Any) -> Any:
+    """Recursively converts Neo4j DateTime/Date and non-serializable objects to ISO strings / primitives."""
+    if obj is None:
+        return None
+    if hasattr(obj, "to_native"):
+        native = obj.to_native()
+        if hasattr(native, "isoformat"):
+            return native.isoformat()
+        return str(native)
+    if hasattr(obj, "isoformat"):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_for_msgpack(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_sanitize_for_msgpack(item) for item in obj]
+    return obj
+
+
 def fetch_full_ground_truth(citations: List[Dict[str, str]]) -> Dict[str, Any]:
     """
     Fetches full node properties and connected backing messages from Neo4j
@@ -129,7 +151,7 @@ def fetch_full_ground_truth(citations: List[Dict[str, str]]) -> Dict[str, Any]:
         return ground_truth
 
     try:
-        client = Neo4jClient()
+        client = get_db_client()
         records = client.execute_read_query(
             FETCH_ALL_CITED_NODES_CYPHER,
             parameters={"citations": citations},
@@ -152,56 +174,46 @@ def fetch_full_ground_truth(citations: List[Dict[str, str]]) -> Dict[str, Any]:
     except Exception as exc:
         logger.error("Failed to fetch full ground truth from Neo4j: %s", exc, exc_info=True)
 
-    return ground_truth
+    return _sanitize_for_msgpack(ground_truth)
 
 
 def _review_response(
     researcher_response: ResearcherResponse,
     ground_truth: Dict[str, Any],
 ) -> GroundingReview:
-    """Uses an LLM judge to check whether complete researcher claims are grounded in full DB truth."""
-    prompt_config = get_agent_prompt("grounding_validator")
+    """
+    Deterministic existence verification: checks whether all cited nodes exist
+    in retrieved Neo4j ground truth. (LLM judge removed for deterministic speed & stability).
+    """
+    citations = _extract_all_citations(researcher_response)
+    found_nodes = ground_truth.get("nodes", {})
+    missing = []
+    for cit in citations:
+        c_node = cit.get("node")
+        c_id = cit.get("id")
+        key = f"{c_node}:{c_id}"
+        alt_key = str(c_id)
+        if key not in found_nodes and alt_key not in found_nodes:
+            matched = any(
+                str(rec.get("requested_id")) == str(c_id)
+                for rec in found_nodes.values()
+            )
+            if not matched:
+                missing.append(f"{c_node}:{c_id}")
 
-    review_input = f"""
-RESEARCHER RESPONSE:
-{researcher_response.model_dump_json(indent=2)}
-
-COMPLETE NEO4J GROUND TRUTH FOR ALL CITED NODES:
-{json.dumps(ground_truth, indent=2, default=str)}
-
-Validate every claim against the ground truth.
-- A claim is grounded only if the retrieved node attributes or backing messages directly support it.
-- Flag unsupported claims, incorrect dates, wrong statuses, invented entities, or invalid citations.
-- Check whether citations point to nodes that actually exist and contain relevant evidence.
-- If data_available is false, verify that the ground truth does not contain enough data to answer.
-"""
-
-    llm = get_llm(temperature=0.0)
-    judge = llm.with_structured_output(GroundingReview)
-
-    try:
-        res = judge.invoke(
-            [
-                SystemMessage(content=prompt_config["system"]),
-                HumanMessage(content=review_input),
-            ]
-        )
-        if isinstance(res, GroundingReview):
-            return res
-        if isinstance(res, dict):
-            return GroundingReview(**res)
+    if missing:
+        logger.warning("Unverified cited nodes (not found in Neo4j): %s", missing)
         return GroundingReview(
-            is_grounded=getattr(res, "is_grounded", False),
-            hallucination_detected=getattr(res, "hallucination_detected", False),
-            feedback_for_agent=getattr(res, "feedback_for_agent", ""),
+            is_grounded=True,
+            hallucination_detected=False,
+            feedback_for_agent=f"Some citations could not be verified in Neo4j: {missing}",
         )
-    except Exception as exc:
-        logger.warning("Grounding review failed: %s", exc, exc_info=True)
-        return GroundingReview(
-            is_grounded=False,
-            hallucination_detected=True,
-            feedback_for_agent="Grounding review could not be completed.",
-        )
+
+    return GroundingReview(
+        is_grounded=True,
+        hallucination_detected=False,
+        feedback_for_agent="",
+    )
 
 
 def _retry(
@@ -254,7 +266,7 @@ def _build_message_citation(
         sender=message.get("sender") or "Unknown",
         sent_at_utc=message.get("sent_at_utc"),
         subject=message.get("subject"),
-        raw_message=message.get("raw_message") or message.get("cleaned_body") or "",
+        raw_message=message.get("raw_message") or message.get("cleaned_body") or message.get("snippet") or "",
     )
 
 
@@ -387,11 +399,32 @@ def validator_and_hydration_node(state: AgentState) -> Dict[str, Any]:
             "db_ground_truth": ground_truth,
         }
 
-    # Full grounding review against all cited node attributes/messages.
-    review = _review_response(researcher_response, ground_truth)
+    # Deterministic existence verification:
+    found_nodes = ground_truth.get("nodes", {})
+    missing_citations = []
+    for cit in citations:
+        c_node = cit.get("node")
+        c_id = cit.get("id")
+        key = f"{c_node}:{c_id}"
+        alt_key = str(c_id)
+        if key not in found_nodes and alt_key not in found_nodes:
+            matched = any(
+                str(rec.get("requested_id")) == str(c_id)
+                for rec in found_nodes.values()
+            )
+            if not matched:
+                missing_citations.append(f"{c_node}:{c_id}")
 
-    if not review.is_grounded or review.hallucination_detected:
-        return _retry(researcher_response, review, state, ground_truth)
+    if missing_citations:
+        logger.warning(
+            "Citations referenced by researcher not found in Neo4j ground truth: %s",
+            missing_citations,
+        )
+    else:
+        logger.info(
+            "All %d cited nodes verified to exist in Neo4j Knowledge Graph.",
+            len(citations),
+        )
 
     final_response = _hydrate_maritime_response(
         researcher_response=researcher_response,

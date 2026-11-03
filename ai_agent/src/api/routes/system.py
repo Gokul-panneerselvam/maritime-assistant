@@ -12,11 +12,12 @@ router = APIRouter(prefix="/api/system", tags=["System"])
 
 
 class HealthCheckResponse(BaseModel):
-    status: str = Field(description="System overall status ('healthy' or 'degraded').")
-    neo4j: str = Field(description="Knowledge graph connection status ('connected' or error details).")
-    llm_provider: str = Field(description="Configured LLM provider name.")
-    database: str = Field(description="Local SQLite metadata store status.")
-    mcp_transport: str = Field(description="Underlying FastMCP transport type.")
+    status: str = Field(description="System overall status ('healthy' or 'degraded').", examples=["healthy"])
+    neo4j: str = Field(description="Knowledge graph connection status ('connected' or error details).", examples=["connected"])
+    llm_provider: str = Field(description="Configured LLM provider name ('azure', 'groq', 'openrouter', 'bedrock').", examples=["azure"])
+    database: str = Field(description="Local SQLite metadata store status.", examples=["sqlite_ready"])
+    mcp_transport: str = Field(description="Underlying FastMCP transport type ('http', 'sse', 'stdio').", examples=["http"])
+    mcp_server: Optional[str] = Field(default=None, description="URL of the Maritime Knowledge Graph MCP server.", examples=["http://localhost:8000"])
 
 
 class SchemaInspectResponse(BaseModel):
@@ -38,13 +39,15 @@ def health():
     except Exception as e:
         neo4j_status = f"error: {str(e)}"
 
-    provider = os.getenv("LLM_PROVIDER", "openrouter")
+    provider = os.getenv("LLM_PROVIDER", "azure")
+    mcp_url = os.getenv("MARITIME_MCP_SERVER_URL", "http://localhost:8000/mcp")
     return {
         "status": "healthy" if neo4j_status == "connected" else "degraded",
         "neo4j": neo4j_status,
         "llm_provider": provider,
         "database": "sqlite_ready",
-        "mcp_transport": "http"
+        "mcp_transport": "http",
+        "mcp_server": mcp_url
     }
 
 

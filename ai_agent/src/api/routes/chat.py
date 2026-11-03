@@ -30,26 +30,47 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 class ChatRequest(BaseModel):
     thread_id: Optional[str] = Field(
         default=None,
-        description="Optional existing session/thread ID. If omitted, a new thread is created automatically."
+        description="Optional existing conversation thread identifier. If omitted, a new operational session is initialized.",
+        examples=["th_9f2a4c8e-b12d"]
     )
     message: str = Field(
-        description="Operational maritime query or instruction from the operator."
+        description="Natural-language maritime operational query, root-cause inquiry, or dispatch instruction.",
+        examples=["Why is voyage VG-1042 delayed, and which customer containers are affected?"]
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "thread_id": "th_session_01",
+                    "message": "Why is voyage VG-1042 delayed, and which customer cargo is affected?"
+                },
+                {
+                    "thread_id": None,
+                    "message": "Which vessels arriving at Rotterdam next week are likely to miss their berth windows?"
+                },
+                {
+                    "thread_id": None,
+                    "message": "List sister vessels and active technical manager for MV Ocean Star."
+                }
+            ]
+        }
+    }
 
 
 class ChatTurnResponse(BaseModel):
     thread_id: str = Field(description="Unique conversation session/thread identifier.")
     response: Optional[MaritimeAgentResponse] = Field(
         default=None,
-        description="Epistemically grounded maritime assistant response with facts, inferences, and citations."
+        description="Epistemically segregated maritime response with verified facts, unverified reports, inferences, and citations."
     )
     is_interrupted: bool = Field(
         default=False,
-        description="Whether execution was interrupted for external review."
+        description="Indicates whether execution was interrupted for external human operator approval."
     )
     needs_clarification: bool = Field(
         default=False,
-        description="True if query entities were ambiguous and require user clarification."
+        description="True if query entities or parameters were ambiguous and require operator clarification."
     )
 
 
@@ -80,7 +101,27 @@ class DeleteThreadResponse(BaseModel):
     thread_id: str = Field(description="ID of the deleted thread.")
 
 
-@router.post("", response_model=ChatTurnResponse, summary="Send chat message", description="Submits a natural-language query to the 5-layer maritime operations agent pipeline.")
+@router.post(
+    "",
+    response_model=ChatTurnResponse,
+    summary="Execute Maritime Operations Chat Turn",
+    description="""
+Submits an operational maritime query to the autonomous 5-layer LangGraph StateGraph pipeline.
+
+### Processing Workflow:
+1. **Input Guardrails**: Validates prompt safety and verifies query is within maritime operations scope.
+2. **Entity Resolution**: Disambiguates vessels, ports, UN/LOCODEs, and normalizes dates to the snapshot anchor `2026-10-26 12:00 UTC`.
+3. **Research Planning**: Automatically synthesizes a domain tool research sequence.
+4. **ReAct Domain Research**: Executes domain tools via FastMCP over HTTP with exponential backoff & full jitter.
+5. **Grounding & Hydration**: Segregates findings into `confirmed_facts`, `unverified_reports`, and `system_inferences`, and deterministically hydrates entity citations and backing messages directly from Neo4j.
+    """,
+    responses={
+        200: {"description": "Turn successfully executed and grounded response returned."},
+        400: {"description": "Input guardrail violation or out-of-scope query refusal."},
+        401: {"description": "Missing or invalid operator JWT bearer authentication token."},
+        500: {"description": "Internal agent workflow or knowledge graph communication failure."},
+    }
+)
 async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """Processes a user prompt through the LangGraph pipeline."""
     start_time = time.time()
