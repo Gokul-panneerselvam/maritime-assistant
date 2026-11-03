@@ -6,6 +6,20 @@ The system standardizes all operational tabular data to UTC, integrates unstruct
 
 ---
 
+## 📽️ Demo & System Walkthrough
+
+Watch the complete demonstration of the Maritime Knowledge Graph & Operations Assistant, showcasing multi-turn agent reasoning, FastMCP domain context tools, epistemic fact segregation, and the React TypeScript operations dashboard:
+
+<p align="center">
+  <video src="docs/assets/maritime_assistant_demo.mp4" controls="controls" width="100%" style="max-width: 850px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+> 💡 *If your browser does not render inline video playback, you can [view or download the demo video directly](docs/assets/maritime_assistant_demo.mp4).*
+
+---
+
 ## 1. Architecture Overview
 
 ```mermaid
@@ -49,8 +63,12 @@ flowchart TD
         MutationTools["Graph Mutation Tools<br/>• create_nodes (Duplicate check & constraint enforcement)<br/>• update_nodes (Validates node existence & manages edges)"]
     end
 
-    subgraph Agent["Autonomous Operations AI Agent"]
-        LLM["AI Agent (Gemini / Groq)"]
+    subgraph Agent["Autonomous Operations AI Agent (ai_agent)"]
+        API["FastAPI REST Interface<br/>• /api/auth (JWT Bearer Auth)<br/>• /api/chat (Multi-turn operations)<br/>• /api/system (Health & Schema)<br/>• Interactive Swagger Docs (/docs)"]
+        
+        LG["5-Layer LangGraph Workflow<br/>1. Input Guardrail (Scope & Injection Check)<br/>2. Entity Resolver (UTC Normalization & Clarification)<br/>3. Data Research Planner (Structured Research Plan)<br/>4. Researcher ReAct Agent (FastMCP HTTP)<br/>5. Grounding Reviewer & Deterministic Hydrator"]
+        
+        API --> LG
     end
 
     Sch --> Neo4j
@@ -63,7 +81,7 @@ flowchart TD
     Bk --> BkLoad --> NodeBk
 
     Neo4j <--> MCPServer
-    MCPServer <--> Agent
+    MCPServer <--> LG
 ```
 
 ---
@@ -321,7 +339,84 @@ All batch executions produce structured audit reports in `ingestion_report_logs/
 
 ---
 
-## 8. Running Tests
+## 8. Autonomous Maritime Operations AI Agent (`ai_agent`)
+
+The system includes a production-grade, 5-layer autonomous AI Agent built on **LangGraph**, **FastMCP**, and **Neo4j** that serves as an intelligent operational co-pilot for fleet dispatchers, port captains, and cargo superintendents.
+
+### 5-Layer Cyclic LangGraph Architecture
+
+```mermaid
+flowchart TD
+    User["Operator Query / Turn"] --> N1["Node 1: Input Guardrail<br/>• Scope boundary validation<br/>• Prompt injection / jailbreak detection<br/>• Safety classification"]
+    
+    N1 -->|Pass| N2["Node 2: Entity Resolver & Normalizer<br/>• Maps colloquial vessel names to canonical IMOs<br/>• Standardizes relative dates to ISO-8601 UTC<br/>• Resolves voyages, port calls, and bookings"]
+    N1 -->|Flagged| Flagged["Blocked Turn<br/>(status: FLAGGED_UNSAFE)"]
+    
+    N2 -->|Ambiguous Reference| Clarify["Clarification Required<br/>(status: CLARIFICATION_NEEDED)"]
+    N2 -->|Resolved| N3["Node 3: Data Research Planner<br/>• Formulates structured research plan<br/>• Identifies target nodes & relationship paths"]
+    
+    N3 --> N4["Node 4: Researcher ReAct Agent<br/>• FastMCP connection over HTTP<br/>• Read-only Cypher query execution<br/>• Strict no-data escape hatch"]
+    
+    N4 --> N5["Node 5: Grounding Reviewer & Hydration<br/>• Batch-fetches cited nodes & backing messages<br/>• LLM Judge checks claims against DB truth<br/>• Deterministically hydrates citations"]
+    
+    N5 -->|Hallucination / Unsupported| N4
+    N5 -->|Verified Ground Truth| Final["Final MaritimeAgentResponse"]
+```
+
+### Epistemic Grounding Model
+
+Every response is strictly partitioned to eliminate hallucinations:
+- **`confirmed_facts`**: Grounded exclusively in verified Neo4j node properties and Tier 1/2 messages.
+- **`unverified_reports`**: Clearly demarcated pending reports or uncorroborated field communications.
+- **`system_inferences`**: Logical projections (e.g. ETA adjustments) with transparent mathematical/temporal rationales.
+- **`false_premises`**: Proactively flags and refutes misconceptions in operator queries.
+- **`citations`**: Hydrated directly from Neo4j records with complete node attributes and backing messages (`message_id`, `trust_tier`, `sender`, `sent_at_utc`, `raw_message`).
+- **`data_available=false`**: Evidence-based abstention escape hatch returning `DATA_UNAVAILABLE` rather than guessing when tools return empty records.
+
+### REST API & Interactive Swagger Documentation
+
+The agent exposes a full RESTful API with automated Swagger and OpenAPI documentation:
+
+- **Swagger UI Explorer**: [http://localhost:8000/docs](http://localhost:8000/docs) (Interactive testing with JWT `Authorize` modal)
+- **ReDoc Documentation**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **OpenAPI 3.1.0 Specification**: [`ai_agent/docs/openapi.json`](file:///ai_agent/docs/openapi.json)
+- **Swagger Markdown Reference**: [`ai_agent/docs/SWAGGER.md`](file:///ai_agent/docs/SWAGGER.md)
+
+| Endpoint | Method | Security | Operational Purpose |
+| :--- | :---: | :---: | :--- |
+| `/api/auth/register` | `POST` | Public | Register new dispatcher with PBKDF2 password hashing |
+| `/api/auth/login` | `POST` | Public | Authenticate operator and issue 24-hr JWT access token |
+| `/api/auth/me` | `GET` | Bearer | Retrieve profile and operational role of current user |
+| `/api/chat` | `POST` | Bearer | Submit query through 5-layer LangGraph pipeline |
+| `/api/chat/threads` | `GET` | Bearer | List active conversation sessions for operator |
+| `/api/chat/threads/{id}/history` | `GET` | Bearer | Fetch complete historical turns and structured responses |
+| `/api/chat/threads/{id}` | `DELETE` | Bearer | Delete conversation session and stored messages |
+| `/api/system/health` | `GET` | Public | Verify Neo4j, FastMCP bridge, and LLM readiness |
+| `/api/system/schema` | `GET` | Public | Inspect Knowledge Graph labels and relationship types |
+
+### Launching All Services in One Command
+
+Start the FastMCP Server (8000), AI Agent API (8080), and Frontend Vite UI (5173) simultaneously:
+
+```powershell
+# Using cross-platform Python launcher
+python start.py
+
+# Or using PowerShell launcher (Windows)
+.\run.ps1
+
+# Or using Docker Compose
+docker compose up --build
+```
+
+Access Points:
+- **Frontend Web UI**: [http://localhost:5173](http://localhost:5173) (or bundled at [http://localhost:8080](http://localhost:8080))
+- **AI Agent Swagger UI**: [http://localhost:8080/docs](http://localhost:8080/docs)
+- **FastMCP KG Server**: [http://localhost:8000/mcp](http://localhost:8000/mcp)
+
+---
+
+## 9. Running Tests
 
 Run the complete test suite across tabular ingestion, MCP tools, MessageLoaderGraph workflow, and security checks:
 

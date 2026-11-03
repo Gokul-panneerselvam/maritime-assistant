@@ -5,6 +5,19 @@ from knowledge_graph.config import Neo4jConfig
 
 logger = logging.getLogger(__name__)
 
+def _clean_neo4j_record(data: Any) -> Any:
+    """Recursively converts Neo4j DateTime/Date objects to native Python datetime/date."""
+    if data is None:
+        return None
+    if hasattr(data, "to_native"):
+        return data.to_native()
+    if isinstance(data, dict):
+        return {k: _clean_neo4j_record(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_clean_neo4j_record(v) for v in data]
+    return data
+
+
 class Neo4jClient:
     """Manages connection and transaction execution with Neo4j."""
 
@@ -45,14 +58,14 @@ class Neo4jClient:
         """Executes a single Cypher query and returns the records as dictionaries."""
         with self.get_session() as session:
             result = session.run(query, parameters or {})
-            return [record.data() for record in result]
+            return [_clean_neo4j_record(record.data()) for record in result]
 
     def execute_read_query(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Executes a query inside an explicit read-only transaction."""
         with self.get_session() as session:
             def _read_tx(tx):
                 result = tx.run(query, parameters or {})
-                return [record.data() for record in result]
+                return [_clean_neo4j_record(record.data()) for record in result]
             return session.execute_read(_read_tx)
 
     def execute_batch(self, query: str, batch: List[Dict[str, Any]]) -> None:

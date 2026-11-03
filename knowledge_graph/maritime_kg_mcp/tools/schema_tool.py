@@ -1,8 +1,14 @@
-import logging
-from typing import Any, Dict
-from knowledge_graph.database import Neo4jClient
+"""Schema introspection tool for Maritime Knowledge Graph.
+Returns node labels, relationship types, constraints, and domain overview.
+"""
 
-logger = logging.getLogger(__name__)
+from __future__ import annotations
+
+from typing import Any, Dict
+from utility.dependencies import DatabaseClientProtocol
+from utility.logger import get_logger
+
+logger = get_logger(__name__)
 
 SCHEMA_METADATA_QUERY = """
 CALL db.labels() YIELD label
@@ -19,9 +25,9 @@ SHOW CONSTRAINTS YIELD name, type, entityType, labelsOrTypes, properties
 RETURN name, type, entityType, labelsOrTypes, properties
 """
 
-def get_graph_schema(client: Neo4jClient) -> Dict[str, Any]:
-    """
-    Returns the Knowledge Graph schema definition, node labels, relationship types,
+
+def get_graph_schema(client: DatabaseClientProtocol) -> Dict[str, Any]:
+    """Returns the Knowledge Graph schema definition, node labels, relationship types,
     and schema constraints to inform client queries.
     """
     try:
@@ -49,7 +55,9 @@ def get_graph_schema(client: Neo4jClient) -> Dict[str, Any]:
                 "Incident": "Operational defects, weather delays, and technical faults",
                 "Congestion": "Daily port-wide anchorage queues and average wait times",
                 "Booking": "Customer container freight allocations and rolled statuses",
-                "Customer": "Shippers and cargo owners placing freight bookings"
+                "Customer": "Shippers and cargo owners placing freight bookings",
+                "Message": "Unstructured operational communications (noon reports, agent emails, bulletins)",
+                "Organization": "Port-agent companies and maritime service organizations"
             }
         }
     except Exception as e:
@@ -60,4 +68,3 @@ def get_graph_schema(client: Neo4jClient) -> Dict[str, Any]:
             "node_labels": [],
             "relationship_types": []
         }
-

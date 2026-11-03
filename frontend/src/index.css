@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#e8f2fa] text-slate-800 font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom Maritime Light Scrollbars with Sky/Teal tones */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #e2eef8;
+}
+::-webkit-scrollbar-thumb {
+  background: #93c5fd;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8;
+}
+
+/* Markdown styling inside messages (Sky, Ocean & Soft Teal Theme) */
+.prose-maritime {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.prose-maritime h1, .prose-maritime h2, .prose-maritime h3 {
+  @apply font-bold mt-3 mb-1.5;
+}
+.prose-maritime h1 { @apply text-base text-sky-950 font-bold; }
+.prose-maritime h2 { @apply text-sm text-sky-900 font-bold; }
+.prose-maritime h3 { @apply text-xs uppercase tracking-wider text-teal-700 font-semibold; }
+.prose-maritime p { @apply text-slate-700 text-xs leading-relaxed mb-2.5; }
+.prose-maritime ul, .prose-maritime ol { @apply my-2 pl-4 text-xs text-slate-700 space-y-1.5; }
+.prose-maritime ul { list-style-type: disc; }
+.prose-maritime ol { list-style-type: decimal; }
+.prose-maritime code { @apply font-mono text-[11px] bg-sky-100/70 px-1.5 py-0.5 rounded text-sky-900 border border-sky-200; }
+.prose-maritime pre { @apply font-mono text-[11px] bg-[#0c1f38] text-teal-200 p-4 rounded-xl overflow-x-auto my-3 border border-sky-900/60 shadow-sm leading-relaxed; }
+.prose-maritime strong { @apply text-slate-900 font-semibold; }
+.prose-maritime blockquote { @apply border-l-2 border-teal-500 pl-3 italic text-slate-600 my-2; }

@@ -1,0 +1,1207 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Maritime Operations AI Agent API",
+    "description": "\n# Commercial Maritime Operations AI Assistant API\n\nA production-grade, 5-layer autonomous AI Agent built on **LangGraph**, **FastMCP**, and **Neo4j Knowledge Graph**.\n\n### Core Capabilities:\n- **Strict Epistemic Grounding**: Claims are strictly partitioned into `confirmed_facts`, `unverified_reports`, and `system_inferences`.\n- **Zero Hallucination Policy**: Every single fact and inference is verified against complete database records by an LLM Judge before presentation.\n- **Deterministic Hydration**: Entity citations (`{node, id}`) and backing messages (`message_id`, `filename`, `trust_tier`, `sent_at_utc`) are hydrated directly from Neo4j ground truth.\n- **Evidence-Based Abstention**: Explicit `no_data_reason` escape hatches (`DATA_UNAVAILABLE`) prevent inventing facts when tools return no records.\n- **Human-in-the-Loop Clarification**: Automatically prompts operators when queries contain ambiguous entity references or missing voyage parameters.\n    ",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register operator",
+        "description": "Creates a new operator account and returns an authenticated JWT bearer token.",
+        "operationId": "register_api_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Operator login",
+        "description": "Authenticates credentials and returns a 24-hour signed JWT access token.",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get current operator",
+        "description": "Retrieves profile and role information for the currently authenticated operator.",
+        "operationId": "me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Send chat message",
+        "description": "Submits a natural-language query to the 5-layer maritime operations agent pipeline.",
+        "operationId": "chat_api_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/chat/threads": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "List conversation threads",
+        "description": "Retrieves active threads and sessions for the authenticated operator.",
+        "operationId": "get_threads_api_chat_threads_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/chat/threads/{thread_id}/history": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Get thread history",
+        "description": "Fetches all previous turns, text, and structured epistemic payloads for a specific thread.",
+        "operationId": "get_history_api_chat_threads__thread_id__history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadHistoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/threads/{thread_id}": {
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Delete conversation thread",
+        "description": "Deletes an entire thread session and all associated turn messages.",
+        "operationId": "delete_thread_api_chat_threads__thread_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteThreadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "System health check",
+        "description": "Verifies connectivity to the Neo4j Knowledge Graph and checks SQLite database readiness.",
+        "operationId": "health_api_system_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/schema": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Graph schema inspection",
+        "description": "Retrieves available Knowledge Graph node labels and relationship types.",
+        "operationId": "schema_api_system_schema_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaInspectResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token",
+            "description": "Signed JWT access bearer token."
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "description": "Token authentication scheme.",
+            "default": "bearer"
+          },
+          "user": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "User",
+            "description": "Authenticated user profile attributes."
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "user"
+        ],
+        "title": "AuthResponse"
+      },
+      "ChatRequest": {
+        "properties": {
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id",
+            "description": "Optional existing session/thread ID. If omitted, a new thread is created automatically."
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Operational maritime query or instruction from the operator."
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ChatRequest"
+      },
+      "ChatTurnResponse": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id",
+            "description": "Unique conversation session/thread identifier."
+          },
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MaritimeAgentResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Epistemically grounded maritime assistant response with facts, inferences, and citations."
+          },
+          "is_interrupted": {
+            "type": "boolean",
+            "title": "Is Interrupted",
+            "description": "Whether execution was interrupted for external review.",
+            "default": false
+          },
+          "needs_clarification": {
+            "type": "boolean",
+            "title": "Needs Clarification",
+            "description": "True if query entities were ambiguous and require user clarification.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread_id"
+        ],
+        "title": "ChatTurnResponse"
+      },
+      "ClarificationOption": {
+        "properties": {
+          "option_id": {
+            "type": "string",
+            "title": "Option Id",
+            "description": "Identifier for the option"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Short human-readable label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Detailed explanation of the choice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "option_id",
+          "label",
+          "description"
+        ],
+        "title": "ClarificationOption"
+      },
+      "ClarificationPrompt": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question",
+            "description": "Clarifying question posed to the operator"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Why clarification is necessary before proceeding"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ClarificationOption"
+            },
+            "type": "array",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "reason"
+        ],
+        "title": "ClarificationPrompt"
+      },
+      "ConfirmedFact": {
+        "properties": {
+          "statement": {
+            "type": "string",
+            "title": "Statement",
+            "description": "Factual claim with strict grounding",
+            "default": ""
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact",
+            "description": "Alias for statement"
+          },
+          "citations": {
+            "items": {},
+            "type": "array",
+            "title": "Citations",
+            "description": "List of citation_ids or filenames supporting this fact"
+          }
+        },
+        "type": "object",
+        "title": "ConfirmedFact",
+        "description": "A claim strictly substantiated by verified tabular records or T1/T2 communications."
+      },
+      "DeleteThreadResponse": {
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted",
+            "description": "Whether the thread was successfully removed."
+          },
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id",
+            "description": "ID of the deleted thread."
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "thread_id"
+        ],
+        "title": "DeleteThreadResponse"
+      },
+      "EntityDataCitation": {
+        "properties": {
+          "citation_type": {
+            "type": "string",
+            "const": "ENTITY_NODE",
+            "title": "Citation Type",
+            "default": "ENTITY_NODE"
+          },
+          "citation_id": {
+            "type": "string",
+            "title": "Citation Id",
+            "description": "Unique reference tag used in the response text, e.g. CIT-02"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Graph Node label: Vessel, Voyage, PortCall, Incident, Booking, Congestion, Port"
+          },
+          "primary_id": {
+            "type": "string",
+            "title": "Primary Id",
+            "description": "Node primary key: V001, INC-084, PC-102, VG-1042, etc."
+          },
+          "attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Attributes",
+            "description": "Complete key-value dictionary of all properties on this node"
+          },
+          "backing_messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageCitation"
+            },
+            "type": "array",
+            "title": "Backing Messages",
+            "description": "Any Message nodes in the graph linked to this entity (e.g. REPORTS, CORROBORATES, REVISES)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "citation_id",
+          "label",
+          "primary_id"
+        ],
+        "title": "EntityDataCitation",
+        "description": "Citation referencing a structured tabular node in the Maritime Knowledge Graph."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthCheckResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "System overall status ('healthy' or 'degraded')."
+          },
+          "neo4j": {
+            "type": "string",
+            "title": "Neo4J",
+            "description": "Knowledge graph connection status ('connected' or error details)."
+          },
+          "llm_provider": {
+            "type": "string",
+            "title": "Llm Provider",
+            "description": "Configured LLM provider name."
+          },
+          "database": {
+            "type": "string",
+            "title": "Database",
+            "description": "Local SQLite metadata store status."
+          },
+          "mcp_transport": {
+            "type": "string",
+            "title": "Mcp Transport",
+            "description": "Underlying FastMCP transport type."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "neo4j",
+          "llm_provider",
+          "database",
+          "mcp_transport"
+        ],
+        "title": "HealthCheckResponse"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username_or_email": {
+            "type": "string",
+            "title": "Username Or Email",
+            "description": "Registered username or email address."
+          },
+          "password": {
+            "type": "string",
+            "title": "Password",
+            "description": "Account password."
+          }
+        },
+        "type": "object",
+        "required": [
+          "username_or_email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "MaritimeAgentResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUCCESS",
+              "CLARIFICATION_NEEDED",
+              "DATA_UNAVAILABLE",
+              "FALSE_PREMISE",
+              "OUT_OF_SCOPE_REFUSAL"
+            ],
+            "title": "Status",
+            "default": "SUCCESS"
+          },
+          "executive_summary": {
+            "type": "string",
+            "title": "Executive Summary",
+            "description": "Concise operational synthesis in executive markdown format",
+            "default": ""
+          },
+          "confirmed_facts": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ConfirmedFact"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "title": "Confirmed Facts"
+          },
+          "unverified_reports": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnverifiedReport"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "title": "Unverified Reports"
+          },
+          "system_inferences": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SystemInference"
+                },
+                {}
+              ]
+            },
+            "type": "array",
+            "title": "System Inferences"
+          },
+          "false_premises_detected": {
+            "items": {
+              "$ref": "#/components/schemas/PremiseCorrection"
+            },
+            "type": "array",
+            "title": "False Premises Detected"
+          },
+          "clarification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClarificationPrompt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citations": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MessageCitation"
+                },
+                {
+                  "$ref": "#/components/schemas/EntityDataCitation"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "cypher_queries_executed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cypher Queries Executed"
+          },
+          "data_missing_explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Missing Explanation",
+            "description": "Explanation if required data was absent from the database"
+          }
+        },
+        "type": "object",
+        "title": "MaritimeAgentResponse",
+        "description": "Structured response object emitted by the Maritime Operations AI Agent."
+      },
+      "MeResponse": {
+        "properties": {
+          "user": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "User",
+            "description": "Authenticated operator details."
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "MeResponse"
+      },
+      "MessageCitation": {
+        "properties": {
+          "citation_type": {
+            "type": "string",
+            "const": "MESSAGE",
+            "title": "Citation Type",
+            "default": "MESSAGE"
+          },
+          "citation_id": {
+            "type": "string",
+            "title": "Citation Id",
+            "description": "Unique reference tag used in the response text, e.g. CIT-01"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "Operational file name, e.g. noon_2026-10-06_ocean_star.txt"
+          },
+          "message_type": {
+            "type": "string",
+            "title": "Message Type",
+            "description": "Source vocabulary: Master's report, Crew message, Agent email, Technical manager, Port agent"
+          },
+          "trust_tier": {
+            "type": "string",
+            "enum": [
+              "T1",
+              "T2",
+              "T3",
+              "T4"
+            ],
+            "title": "Trust Tier",
+            "description": "Hierarchy tier for conflict resolution"
+          },
+          "sender": {
+            "type": "string",
+            "title": "Sender",
+            "description": "From header or sender identity"
+          },
+          "sent_at_utc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At Utc",
+            "description": "ISO-8601 UTC timestamp"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject",
+            "description": "Subject header"
+          },
+          "raw_message": {
+            "type": "string",
+            "title": "Raw Message",
+            "description": "Verbatim, unmodified text of the operational message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "citation_id",
+          "filename",
+          "message_type",
+          "trust_tier",
+          "sender",
+          "raw_message"
+        ],
+        "title": "MessageCitation",
+        "description": "Citation referencing an unstructured operational communication node."
+      },
+      "PremiseCorrection": {
+        "properties": {
+          "user_assumption": {
+            "type": "string",
+            "title": "User Assumption",
+            "description": "The incorrect premise found in the user prompt"
+          },
+          "grounded_reality": {
+            "type": "string",
+            "title": "Grounded Reality",
+            "description": "The verified ground truth from the graph"
+          },
+          "citations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Citations",
+            "description": "Citations supporting the ground truth"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_assumption",
+          "grounded_reality"
+        ],
+        "title": "PremiseCorrection",
+        "description": "Explicit correction when a user query is built upon a false assumption."
+      },
+      "RegisterRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "title": "Username",
+            "description": "Unique username for the operator."
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "Corporate email address."
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "title": "Password",
+            "description": "Plain text password to be hashed using PBKDF2-SHA256."
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name",
+            "description": "Operator full legal or display name."
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role",
+            "description": "Operational role assignment.",
+            "default": "fleet_dispatcher"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "email",
+          "password",
+          "full_name"
+        ],
+        "title": "RegisterRequest"
+      },
+      "SchemaInspectResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Whether schema query succeeded."
+          },
+          "node_labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Node Labels",
+            "description": "All registered node labels in Neo4j."
+          },
+          "relationship_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Relationship Types",
+            "description": "All registered relationship types in Neo4j."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message if schema inspection failed."
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "SchemaInspectResponse"
+      },
+      "SystemInference": {
+        "properties": {
+          "deduction": {
+            "type": "string",
+            "title": "Deduction",
+            "description": "Synthesized operational deduction or forward projection",
+            "default": ""
+          },
+          "inference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference",
+            "description": "Alias for deduction"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "description": "Step-by-step reasoning linking facts and reports to this conclusion",
+            "default": ""
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ],
+            "title": "Confidence",
+            "default": "MEDIUM"
+          },
+          "supporting_citations": {
+            "items": {},
+            "type": "array",
+            "title": "Supporting Citations",
+            "description": "List of citations grounding the premises of this inference"
+          }
+        },
+        "type": "object",
+        "title": "SystemInference",
+        "description": "The agent's reasoned projection, mathematical deduction, or root-cause hypothesis."
+      },
+      "ThreadHistoryResponse": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id",
+            "description": "Thread session identifier."
+          },
+          "messages": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Messages",
+            "description": "Chronological message history including roles, text, and structured payloads."
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread_id"
+        ],
+        "title": "ThreadHistoryResponse"
+      },
+      "ThreadListResponse": {
+        "properties": {
+          "threads": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadSummary"
+            },
+            "type": "array",
+            "title": "Threads",
+            "description": "List of active conversation threads belonging to the operator."
+          }
+        },
+        "type": "object",
+        "title": "ThreadListResponse"
+      },
+      "ThreadSummary": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id",
+            "description": "Thread session identifier."
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Thread subject summary."
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Session creation timestamp."
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Last activity timestamp."
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread_id"
+        ],
+        "title": "ThreadSummary"
+      },
+      "UnverifiedReport": {
+        "properties": {
+          "statement": {
+            "type": "string",
+            "title": "Statement",
+            "description": "Claim originating from unverified or pending operational logs",
+            "default": ""
+          },
+          "report": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report",
+            "description": "Alias for statement"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Originating channel or sender (e.g. Crew WhatsApp Relay)",
+            "default": "Field Communication"
+          },
+          "citations": {
+            "items": {},
+            "type": "array",
+            "title": "Citations",
+            "description": "List of citation_ids or filenames supporting this report"
+          }
+        },
+        "type": "object",
+        "title": "UnverifiedReport",
+        "description": "A claim originating from pending records, T3 crew relays, or T4 customer messages."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Operator registration, PBKDF2 credential verification, and JWT bearer token issuance."
+    },
+    {
+      "name": "Chat",
+      "description": "Multi-turn conversational operations interface powered by a 5-layer LangGraph StateGraph: Input Guardrails -> Entity Resolution & Temporal Normalization -> Data Research Planner -> Researcher (FastMCP HTTP) -> Epistemic Grounding Reviewer & Deterministic Hydration."
+    },
+    {
+      "name": "System",
+      "description": "System health diagnostics, FastMCP bridge connectivity, and Knowledge Graph schema inspection."
+    }
+  ]
+}
