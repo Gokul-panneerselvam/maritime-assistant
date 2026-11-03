@@ -380,15 +380,25 @@ The agent exposes a full RESTful API with automated Swagger and OpenAPI document
 | `/api/system/health` | `GET` | Public | Verify Neo4j, FastMCP bridge, and LLM readiness |
 | `/api/system/schema` | `GET` | Public | Inspect Knowledge Graph labels and relationship types |
 
-### Launching the AI Agent API Server
+### Launching All Services in One Command
+
+Start the FastMCP Server (8000), AI Agent API (8080), and Frontend Vite UI (5173) simultaneously:
 
 ```powershell
-# Run the FastAPI server with uv
-uv run python -m ai_agent.src.api.main
+# Using cross-platform Python launcher
+python start.py
 
-# Or run using uvicorn with live reload
-uv run uvicorn ai_agent.src.api.main:app --host 0.0.0.0 --port 8000 --reload
+# Or using PowerShell launcher (Windows)
+.\run.ps1
+
+# Or using Docker Compose
+docker compose up --build
 ```
+
+Access Points:
+- **Frontend Web UI**: [http://localhost:5173](http://localhost:5173) (or bundled at [http://localhost:8080](http://localhost:8080))
+- **AI Agent Swagger UI**: [http://localhost:8080/docs](http://localhost:8080/docs)
+- **FastMCP KG Server**: [http://localhost:8000/mcp](http://localhost:8000/mcp)
 
 ---
 

@@ -330,22 +330,6 @@
           }
         }
       }
-    },
-    "/": {
-      "get": {
-        "summary": "Root",
-        "operationId": "root__get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -498,21 +482,29 @@
           "statement": {
             "type": "string",
             "title": "Statement",
-            "description": "Factual claim with strict grounding"
+            "description": "Factual claim with strict grounding",
+            "default": ""
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact",
+            "description": "Alias for statement"
           },
           "citations": {
-            "items": {
-              "type": "string"
-            },
+            "items": {},
             "type": "array",
             "title": "Citations",
             "description": "List of citation_ids or filenames supporting this fact"
           }
         },
         "type": "object",
-        "required": [
-          "statement"
-        ],
         "title": "ConfirmedFact",
         "description": "A claim strictly substantiated by verified tabular records or T1/T2 communications."
       },
@@ -984,12 +976,26 @@
           "deduction": {
             "type": "string",
             "title": "Deduction",
-            "description": "Synthesized operational deduction or forward projection"
+            "description": "Synthesized operational deduction or forward projection",
+            "default": ""
+          },
+          "inference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference",
+            "description": "Alias for deduction"
           },
           "rationale": {
             "type": "string",
             "title": "Rationale",
-            "description": "Step-by-step reasoning linking facts and reports to this conclusion"
+            "description": "Step-by-step reasoning linking facts and reports to this conclusion",
+            "default": ""
           },
           "confidence": {
             "type": "string",
@@ -1002,19 +1008,13 @@
             "default": "MEDIUM"
           },
           "supporting_citations": {
-            "items": {
-              "type": "string"
-            },
+            "items": {},
             "type": "array",
             "title": "Supporting Citations",
             "description": "List of citations grounding the premises of this inference"
           }
         },
         "type": "object",
-        "required": [
-          "deduction",
-          "rationale"
-        ],
         "title": "SystemInference",
         "description": "The agent's reasoned projection, mathematical deduction, or root-cause hypothesis."
       },
@@ -1110,27 +1110,35 @@
           "statement": {
             "type": "string",
             "title": "Statement",
-            "description": "Claim originating from unverified or pending operational logs"
+            "description": "Claim originating from unverified or pending operational logs",
+            "default": ""
+          },
+          "report": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report",
+            "description": "Alias for statement"
           },
           "source": {
             "type": "string",
             "title": "Source",
-            "description": "Originating channel or sender (e.g. Crew WhatsApp Relay)"
+            "description": "Originating channel or sender (e.g. Crew WhatsApp Relay)",
+            "default": "Field Communication"
           },
           "citations": {
-            "items": {
-              "type": "string"
-            },
+            "items": {},
             "type": "array",
             "title": "Citations",
             "description": "List of citation_ids or filenames supporting this report"
           }
         },
         "type": "object",
-        "required": [
-          "statement",
-          "source"
-        ],
         "title": "UnverifiedReport",
         "description": "A claim originating from pending records, T3 crew relays, or T4 customer messages."
       },

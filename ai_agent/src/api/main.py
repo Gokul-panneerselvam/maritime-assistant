@@ -64,21 +64,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
 app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(system_router)
 
-
-@app.get("/")
-def root():
-    return {
-        "status": "online",
-        "service": "Maritime Operations AI Agent API",
-        "version": "2.0.0",
-        "docs": "/docs"
-    }
+# Mount built frontend UI if dist directory exists
+FRONTEND_DIST = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+else:
+    @app.get("/")
+    def root():
+        return {
+            "status": "online",
+            "service": "Maritime Operations AI Agent API",
+            "version": "2.0.0",
+            "docs": "/docs",
+            "frontend": "Run 'npm --prefix frontend run dev' for development UI"
+        }
 
 
 if __name__ == "__main__":
-    uvicorn.run("ai_agent.src.api.main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", "8080"))
+    uvicorn.run("ai_agent.src.api.main:app", host="0.0.0.0", port=port, reload=True)
 

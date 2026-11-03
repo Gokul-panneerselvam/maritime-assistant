@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.26.0
+    container_name: maritime-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/#Neo4J@0411#
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: maritime-mcp-server
+    command: ["python", "-m", "knowledge_graph.maritime_kg_mcp.main", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=#Neo4J@0411#
+      - NEO4J_DATABASE=maritime-kg
+    depends_on:
+      neo4j:
+        condition: service_healthy
+
+  ai-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: maritime-ai-agent
+    command: ["uvicorn", "ai_agent.src.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=#Neo4J@0411#
+      - NEO4J_DATABASE=maritime-kg
+      - MARITIME_MCP_SERVER_URL=http://mcp-server:8000/mcp
+      - LLM_PROVIDER=groq
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - mcp-server
+
+volumes:
+  neo4j_data:
+

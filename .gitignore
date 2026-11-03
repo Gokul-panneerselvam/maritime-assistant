@@ -32,6 +32,22 @@ ingestion_report_logs/*.md
 ai_agent/storage/*
 !ai_agent/storage/.gitkeep
 
+# Node / Frontend
+node_modules/
+**/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+*.bak
+
 .DS_Store
-*.DS_Store
+*# Node / Frontend
+node_modules/
+**/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+*.bak
+
+.DS_Store
 Thumbs.db

@@ -49,32 +49,64 @@ Citation = Union[MessageCitation, EntityDataCitation]
 
 class ConfirmedFact(BaseModel):
     """A claim strictly substantiated by verified tabular records or T1/T2 communications."""
-    statement: str = Field(description="Factual claim with strict grounding")
-    citations: List[str] = Field(
+    statement: str = Field(default="", description="Factual claim with strict grounding")
+    fact: Optional[str] = Field(default=None, description="Alias for statement")
+    citations: List[Any] = Field(
         default_factory=list,
         description="List of citation_ids or filenames supporting this fact"
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def sync_statement_fact(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            val = data.get("statement") or data.get("fact") or ""
+            data["statement"] = val
+            data["fact"] = val
+        return data
+
 
 class UnverifiedReport(BaseModel):
     """A claim originating from pending records, T3 crew relays, or T4 customer messages."""
-    statement: str = Field(description="Claim originating from unverified or pending operational logs")
-    source: str = Field(description="Originating channel or sender (e.g. Crew WhatsApp Relay)")
-    citations: List[str] = Field(
+    statement: str = Field(default="", description="Claim originating from unverified or pending operational logs")
+    report: Optional[str] = Field(default=None, description="Alias for statement")
+    source: str = Field(default="Field Communication", description="Originating channel or sender (e.g. Crew WhatsApp Relay)")
+    citations: List[Any] = Field(
         default_factory=list,
         description="List of citation_ids or filenames supporting this report"
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def sync_statement_report(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            val = data.get("statement") or data.get("report") or ""
+            data["statement"] = val
+            data["report"] = val
+        return data
+
 
 class SystemInference(BaseModel):
     """The agent's reasoned projection, mathematical deduction, or root-cause hypothesis."""
-    deduction: str = Field(description="Synthesized operational deduction or forward projection")
-    rationale: str = Field(description="Step-by-step reasoning linking facts and reports to this conclusion")
+    deduction: str = Field(default="", description="Synthesized operational deduction or forward projection")
+    inference: Optional[str] = Field(default=None, description="Alias for deduction")
+    rationale: str = Field(default="", description="Step-by-step reasoning linking facts and reports to this conclusion")
     confidence: Literal["HIGH", "MEDIUM", "LOW"] = "MEDIUM"
-    supporting_citations: List[str] = Field(
+    supporting_citations: List[Any] = Field(
         default_factory=list,
         description="List of citations grounding the premises of this inference"
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_deduction_inference(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            val = data.get("deduction") or data.get("inference") or ""
+            data["deduction"] = val
+            data["inference"] = val
+            if not data.get("supporting_citations") and data.get("citations"):
+                data["supporting_citations"] = data.get("citations")
+        return data
 
 
 class PremiseCorrection(BaseModel):

@@ -15,28 +15,28 @@ def main():
     )
     parser.add_argument(
         "--transport",
-        choices=["stdio", "sse", "streamable-stdio"],
-        default="stdio",
-        help="MCP transport protocol (default: stdio)"
+        choices=["stdio", "sse", "http", "streamable-http"],
+        default="http",
+        help="MCP transport protocol (default: http)"
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8000,
-        help="Port for SSE transport (default: 8000)"
+        help="Port for HTTP/SSE transport (default: 8000)"
     )
     parser.add_argument(
         "--host",
         type=str,
         default="127.0.0.1",
-        help="Host for SSE transport (default: 127.0.0.1)"
+        help="Host for HTTP/SSE transport (default: 127.0.0.1)"
     )
 
     args = parser.parse_args()
 
-    if args.transport == "sse":
-        print(f"Starting Maritime Knowledge Graph MCP Server (transport: {args.transport})...", file=sys.stderr)
-        mcp.run(transport="sse", host=args.host, port=args.port)
+    if args.transport in ["sse", "http", "streamable-http"]:
+        print(f"Starting Maritime Knowledge Graph MCP Server (transport: {args.transport}, host: {args.host}, port: {args.port})...", file=sys.stderr)
+        mcp.run(transport=args.transport, host=args.host, port=args.port)
     else:
         mcp.run(transport="stdio", show_banner=False)
 

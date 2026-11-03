@@ -65,18 +65,22 @@ def planner_node(state: AgentState) -> Dict[str, Any]:
                         """
 
     llm = get_llm(temperature=0.0)
-    structured_llm = llm.with_structured_output(DataResearchPlan)
 
     try:
-        eval_result = structured_llm.invoke([
+        # The research planner system prompt explicitly instructs:
+        # "Output the plan as plain structured text (numbered sections), not JSON."
+        # We invoke the LLM directly to obtain the full descriptive research plan,
+        # avoiding tool_choice='required' conflicts with providers like Groq.
+        response = llm.invoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt)
         ])
 
-        if isinstance(eval_result, dict):
-            eval_result = DataResearchPlan.model_validate(eval_result)
+        plan_content = response.content if hasattr(response, "content") else str(response)
+        if isinstance(plan_content, list):
+            plan_content = "\n".join([str(b.get("text", b)) if isinstance(b, dict) else str(b) for b in plan_content])
+        descriptive_plan = str(plan_content).strip()
 
-        descriptive_plan = format_research_plan_text(eval_result)
         logger.info("Data research plan successfully generated.")
 
         return {
@@ -84,7 +88,7 @@ def planner_node(state: AgentState) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Data research planner failed to generate structured plan: %s", e, exc_info=True)
+        logger.error("Data research planner failed to generate plan: %s", e, exc_info=True)
         # Fallback to descriptive guidance using raw user query and resolved entities
         fallback_plan = (
             f"RESEARCH PLAN (FALLBACK):\n"

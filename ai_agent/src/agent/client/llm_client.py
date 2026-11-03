@@ -22,22 +22,22 @@ class LLMClient:
             return None
         try:
             from langchain_openai import ChatOpenAI
-            target_model = model or os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash-vision-exp")
-            provider_name = os.getenv("OPENROUTER_PROVIDER_NAME", "deepinfra/fp8")
-            max_tokens = int(os.getenv("OPENROUTER_MAX_TOKENS", "2048"))
+            target_model = model or os.getenv("OPENROUTER_MODEL", "meta-llama/llama-4-scout")
+            provider_name = (os.getenv("OPENROUTER_PROVIDER_NAME") or "").strip()
+            max_tokens = int(os.getenv("OPENROUTER_MAX_TOKENS", "4096"))
 
-            extra_body = {"reasoning": {"enabled": True}}
+            extra_body = {}
             if provider_name:
                 extra_body["provider"] = {"only": [provider_name], "allow_fallbacks": True}
 
-            logger.debug("Configured OpenRouter model: %s (max_tokens: %d)", target_model, max_tokens)
+            logger.info("Configured OpenRouter model: %s (max_tokens: %d)", target_model, max_tokens)
             return ChatOpenAI(
                 model=target_model,
                 openai_api_key=openrouter_key,
                 openai_api_base="https://openrouter.ai/api/v1",
                 temperature=temperature,
                 max_tokens=max_tokens,
-                extra_body=extra_body
+                extra_body=extra_body if extra_body else None
             )
         except Exception as e:
             logger.warning("Failed to configure OpenRouter LLM: %s", e)
@@ -50,10 +50,80 @@ class LLMClient:
             return None
         try:
             from langchain_groq import ChatGroq
-            target_model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+
+            class RobustChatGroq(ChatGroq):
+                """ChatGroq with parameter sanitization conforming to Groq's API constraints."""
+
+                def with_structured_output(self, schema, **kwargs):
+                    if "method" not in kwargs:
+                        kwargs["method"] = "json_schema"
+                    return super().with_structured_output(schema, **kwargs)
+
+                @staticmethod
+                def _sanitize_groq_params(params: dict) -> dict:
+                    # Groq API rule: json mode cannot be combined with tool/function calling
+                    if params.get("tools") and "response_format" in params:
+                        cleaned = dict(params)
+                        cleaned.pop("response_format", None)
+                        return cleaned
+                    return params
+
+                def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+                    message_dicts, params = self._create_message_dicts(messages, stop)
+                    params = self._sanitize_groq_params({**params, **kwargs})
+                    try:
+                        response = self.client.create(messages=message_dicts, **params)
+                        return self._create_chat_result(response, params)
+                    except Exception as exc:
+                        err_msg = str(exc).lower()
+                        if ("rate_limit_exceeded" in err_msg or "413" in err_msg or "too large" in err_msg) and params.get("model") != "llama-3.3-70b-versatile":
+                            logger.warning(
+                                "Groq TPM limit reached for model '%s'. Falling back to 'llama-3.3-70b-versatile' (100k TPM)...",
+                                params.get("model")
+                            )
+                            fallback_params = dict(params)
+                            fallback_params["model"] = "llama-3.3-70b-versatile"
+                            response = self.client.create(messages=message_dicts, **fallback_params)
+                            return self._create_chat_result(response, fallback_params)
+                        raise
+
+                async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+                    message_dicts, params = self._create_message_dicts(messages, stop)
+                    params = self._sanitize_groq_params({**params, **kwargs})
+                    try:
+                        response = await self.async_client.create(messages=message_dicts, **params)
+                        return self._create_chat_result(response, params)
+                    except Exception as exc:
+                        err_msg = str(exc).lower()
+                        if ("rate_limit_exceeded" in err_msg or "413" in err_msg or "too large" in err_msg) and params.get("model") != "llama-3.3-70b-versatile":
+                            logger.warning(
+                                "Groq TPM limit reached for model '%s'. Falling back to 'llama-3.3-70b-versatile' (100k TPM)...",
+                                params.get("model")
+                            )
+                            fallback_params = dict(params)
+                            fallback_params["model"] = "llama-3.3-70b-versatile"
+                            response = await self.async_client.create(messages=message_dicts, **fallback_params)
+                            return self._create_chat_result(response, fallback_params)
+                        raise
+
+                def _stream(self, messages, stop=None, run_manager=None, **kwargs):
+                    kwargs = self._sanitize_groq_params(kwargs)
+                    return super()._stream(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+                async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
+                    kwargs = self._sanitize_groq_params(kwargs)
+                    async for chunk in super()._astream(messages, stop=stop, run_manager=run_manager, **kwargs):
+                        yield chunk
+
+            env_model = (os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile").strip()
+            # openai/gpt-oss-120b has an 8k TPM limit on Groq free tier which causes 413 Payload Too Large on complex prompts
+            if env_model == "openai/gpt-oss-120b":
+                target_model = model or "llama-3.3-70b-versatile"
+            else:
+                target_model = model or env_model
             max_tokens = int(os.getenv("GROQ_MAX_TOKENS", "2048"))
             logger.debug("Configured Groq model: %s (max_tokens: %d)", target_model, max_tokens)
-            return ChatGroq(
+            return RobustChatGroq(
                 model=target_model,
                 api_key=groq_key,
                 temperature=temperature,
@@ -62,6 +132,81 @@ class LLMClient:
             )
         except Exception as e:
             logger.warning("Failed to configure Groq LLM: %s", e)
+            return None
+
+    @staticmethod
+    def _build_bedrock_llm(model: Optional[str] = None, temperature: float = 0.0) -> Optional[Any]:
+        arn = (
+            model
+            or os.getenv("ARN")
+            or os.getenv("BEDROCK_MODEL_ARN")
+            or os.getenv("AWS_BEDROCK_MODEL_ARN")
+            or os.getenv("BEDROCK_MODEL_ID")
+            or ""
+        ).strip().strip("'\"")
+
+        if not arn:
+            logger.warning("No AWS Bedrock ARN found in environment (ARN / BEDROCK_MODEL_ARN).")
+            return None
+
+        try:
+            from langchain_aws import ChatBedrockConverse
+
+            # Extract region from ARN if present: arn:aws:bedrock:<region>:<account>:...
+            region_name = (
+                os.getenv("AWS_REGION")
+                or os.getenv("AWS_DEFAULT_REGION")
+                or ""
+            ).strip().strip("'\"")
+
+            if not region_name and ":bedrock:" in arn:
+                parts = arn.split(":")
+                if len(parts) >= 4:
+                    region_name = parts[3]
+            region_name = region_name or "ap-southeast-2"
+
+            # Detect provider from ARN/model string (Bedrock requires provider when passing an ARN)
+            provider = (os.getenv("BEDROCK_MODEL_PROVIDER") or "").strip().strip("'\"")
+            if not provider:
+                model_segment = arn.split("/")[-1] if "/" in arn else arn
+                if "anthropic" in model_segment.lower():
+                    provider = "anthropic"
+                elif "amazon" in model_segment.lower():
+                    provider = "amazon"
+                elif "meta" in model_segment.lower():
+                    provider = "meta"
+                elif "cohere" in model_segment.lower():
+                    provider = "cohere"
+                elif "mistral" in model_segment.lower():
+                    provider = "mistral"
+                else:
+                    provider = "anthropic"
+
+            max_tokens = int(os.getenv("BEDROCK_MAX_TOKENS", os.getenv("MAX_TOKENS", "4096")))
+
+            kwargs = {
+                "model_id": arn,
+                "provider": provider,
+                "region_name": region_name,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+
+            aws_access_key = (os.getenv("AWS_ACCESS_KEY_ID") or "").strip().strip("'\"")
+            aws_secret_key = (os.getenv("AWS_SECRET_ACCESS_KEY") or "").strip().strip("'\"")
+            aws_session_token = (os.getenv("AWS_SESSION_TOKEN") or "").strip().strip("'\"")
+
+            if aws_access_key and aws_secret_key:
+                kwargs["aws_access_key_id"] = aws_access_key
+                kwargs["aws_secret_access_key"] = aws_secret_key
+                if aws_session_token:
+                    kwargs["aws_session_token"] = aws_session_token
+
+            logger.info("Configured AWS Bedrock LLM: %s (region: %s, provider: %s)", arn, region_name, provider)
+            return ChatBedrockConverse(**kwargs)
+
+        except Exception as e:
+            logger.error("Failed to configure AWS Bedrock LLM: %s", e, exc_info=True)
             return None
 
     @staticmethod
@@ -78,6 +223,43 @@ class LLMClient:
             logger.warning("Failed to configure Gemini LLM: %s", e)
             return None
 
+    @staticmethod
+    def _build_azure_llm(model: Optional[str] = None, temperature: float = 0.0) -> Optional[Any]:
+        azure_key = (
+            os.getenv("AZURE_API_KEY")
+            or os.getenv("AZURE_OPENAI_API_KEY")
+            or ""
+        ).strip().strip("'\"")
+        if not azure_key:
+            return None
+        try:
+            from langchain_openai import ChatOpenAI
+            target_model = (
+                model
+                or os.getenv("AZURE_DEPLOYMENT_NAME")
+                or os.getenv("AZURE_MODEL")
+                or "DeepSeek-V4-Pro"
+            ).strip().strip("'\"")
+            endpoint = (
+                os.getenv("AZURE_ENDPOINT")
+                or os.getenv("AZURE_OPENAI_ENDPOINT")
+                or "https://gokulpannerselvam02-631-resource.services.ai.azure.com/openai/v1"
+            ).strip().strip("'\"")
+
+            max_tokens = int(os.getenv("AZURE_MAX_TOKENS", os.getenv("MAX_TOKENS", "4096")))
+
+            logger.info("Configured Azure AI LLM: %s at %s (max_tokens: %d)", target_model, endpoint, max_tokens)
+            return ChatOpenAI(
+                model=target_model,
+                openai_api_key=azure_key,
+                openai_api_base=endpoint,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+        except Exception as e:
+            logger.error("Failed to configure Azure LLM: %s", e, exc_info=True)
+            return None
+
     @classmethod
     def get_agent_llm(
         cls,
@@ -87,15 +269,29 @@ class LLMClient:
     ) -> Any:
         """
         Instantiates and returns the configured Chat LLM.
-        Provider is selected by LLM_PROVIDER ('openrouter', 'groq', 'gemini').
+        Provider is selected by LLM_PROVIDER ('azure', 'bedrock', 'groq', 'gemini', 'openrouter').
         """
-        raw_provider = os.getenv("LLM_PROVIDER", "openrouter")
-        provider = raw_provider.strip().lower() if raw_provider else "openrouter"
-        if provider not in ['openrouter', 'groq', 'gemini']:
-            raise ValueError(f"No valid LLM provider '{provider}', must be one of 'openrouter', 'groq', 'gemini'.")
+        raw_provider = os.getenv("LLM_PROVIDER", "")
+        provider = raw_provider.strip().lower() if raw_provider else ""
+
+        # Auto-detect azure if AZURE_API_KEY is present and provider wasn't explicitly set to another
+        if provider in ["azure", "azure_openai", "azure_ai"] or (not provider and os.getenv("AZURE_API_KEY")):
+            provider = "azure"
+        elif provider in ["bedrock", "aws", "aws_bedrock"] or (not provider and os.getenv("ARN")):
+            provider = "bedrock"
+        elif not provider:
+            provider = "groq"
+
+        valid_providers = ["azure", "azure_openai", "azure_ai", "bedrock", "aws", "aws_bedrock", "groq", "gemini", "openrouter"]
+        if provider not in valid_providers:
+            raise ValueError(f"No valid LLM provider '{provider}', must be one of {valid_providers}.")
 
         llm_instance = None
-        if provider == "groq":
+        if provider in ["azure", "azure_openai", "azure_ai"]:
+            llm_instance = cls._build_azure_llm(model=model, temperature=temperature)
+        elif provider in ["bedrock", "aws", "aws_bedrock"]:
+            llm_instance = cls._build_bedrock_llm(model=model, temperature=temperature)
+        elif provider == "groq":
             llm_instance = cls._build_groq_llm(model=model, temperature=temperature)
         elif provider == "gemini":
             llm_instance = cls._build_gemini_llm(model=model, temperature=temperature)

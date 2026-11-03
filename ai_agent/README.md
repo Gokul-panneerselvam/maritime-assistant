@@ -116,17 +116,31 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_password
 ```
 
-### 2. Start the API Server
-Run the FastAPI application with `uv`:
+### 2. Launch All Services (One Command)
+Run the cross-platform unified launcher to start the FastMCP Server (8000), AI Agent API (8080), and Frontend Vite UI (5173) simultaneously:
 
 ```powershell
-uv run python -m ai_agent.src.api.main
+# Using Python
+python start.py
+
+# Or using PowerShell launcher
+.\run.ps1
+
+# Or using Docker Compose
+docker compose up --build
 ```
 
-Or using `uvicorn`:
+You can also run services independently:
 
 ```powershell
-uv run uvicorn ai_agent.src.api.main:app --host 0.0.0.0 --port 8000 --reload
+# Run API server only (serves both API and bundled Web UI on port 8080)
+uv run python -m ai_agent.src.api.main
+
+# Run FastMCP server only (port 8000)
+uv run python -m knowledge_graph.maritime_kg_mcp.main --transport http --port 8000
+
+# Run Frontend Vite dev server (port 5173)
+npm --prefix frontend run dev
 ```
 
 ---

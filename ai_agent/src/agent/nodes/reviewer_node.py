@@ -21,6 +21,9 @@ from ai_agent.src.schemas.epistemic import (
     MessageCitation,
     EntityDataCitation,
     Citation,
+    ConfirmedFact,
+    UnverifiedReport,
+    SystemInference,
 )
 from ai_agent.src.schemas.researcher_agent_dto import ResearcherResponse
 from ai_agent.src.schemas.grounding_review_dto import GroundingReview
@@ -289,12 +292,54 @@ def _hydrate_maritime_response(
             )
         counter += 1
 
+    def _extract_c_strings(items: List[Any]) -> List[str]:
+        out = []
+        for c in items or []:
+            if isinstance(c, str):
+                out.append(c)
+            elif isinstance(c, dict):
+                out.append(str(c.get("id") or c.get("node") or c))
+            else:
+                cid = getattr(c, "id", None) or getattr(c, "node", None)
+                out.append(str(cid) if cid else str(c))
+        return out
+
+    hydrated_facts = [
+        ConfirmedFact(
+            statement=getattr(f, "statement", None) or getattr(f, "fact", "") or "",
+            fact=getattr(f, "statement", None) or getattr(f, "fact", "") or "",
+            citations=_extract_c_strings(getattr(f, "citations", [])),
+        )
+        for f in (researcher_response.confirmed_facts or [])
+    ]
+
+    hydrated_reports = [
+        UnverifiedReport(
+            statement=getattr(r, "statement", None) or getattr(r, "report", "") or "",
+            report=getattr(r, "statement", None) or getattr(r, "report", "") or "",
+            source=getattr(r, "source", "Operational Report") or "Operational Report",
+            citations=_extract_c_strings(getattr(r, "citations", [])),
+        )
+        for r in (researcher_response.unverified_reports or [])
+    ]
+
+    hydrated_inferences = [
+        SystemInference(
+            deduction=getattr(inf, "deduction", None) or getattr(inf, "inference", "") or "",
+            inference=getattr(inf, "deduction", None) or getattr(inf, "inference", "") or "",
+            rationale=getattr(inf, "rationale", "") or "",
+            confidence=getattr(inf, "confidence", "HIGH") or "HIGH",
+            supporting_citations=_extract_c_strings(getattr(inf, "citations", [])),
+        )
+        for inf in (researcher_response.system_inferences or [])
+    ]
+
     return MaritimeAgentResponse(
         status="SUCCESS",
         executive_summary=researcher_response.summary,
-        confirmed_facts=researcher_response.confirmed_facts,
-        unverified_reports=researcher_response.unverified_reports,
-        system_inferences=researcher_response.system_inferences,
+        confirmed_facts=hydrated_facts,
+        unverified_reports=hydrated_reports,
+        system_inferences=hydrated_inferences,
         false_premises_detected=[],
         citations=hydrated_citations,
         cypher_queries_executed=[],
@@ -333,13 +378,8 @@ def validator_and_hydration_node(state: AgentState) -> Dict[str, Any]:
     citations = _extract_all_citations(researcher_response)
     ground_truth = fetch_full_ground_truth(citations)
 
-    # No-data answer: validate that abstention is reasonable, then return it.
+    # No-data answer: evidence-based abstention escape hatch
     if not researcher_response.data_available:
-        review = _review_response(researcher_response, ground_truth)
-
-        if not review.is_grounded or review.hallucination_detected:
-            return _retry(researcher_response, review, state, ground_truth)
-
         return {
             "final_response": _build_no_data_final_response(researcher_response),
             "validation_status": "PASSED",

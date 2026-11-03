@@ -23,9 +23,9 @@ RUN uv pip install --system -r pyproject.toml
 # Copy project source
 COPY . .
 
-# Expose port for FastAPI gateway
-EXPOSE 8000
+# Expose ports for FastAPI gateway and FastMCP server
+EXPOSE 8080 8000
 
 # Default entry point
-CMD ["python", "-m", "ai_agent.api.main"]
+CMD ["python", "-m", "ai_agent.src.api.main"]
 

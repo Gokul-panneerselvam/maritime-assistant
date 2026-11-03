@@ -8,6 +8,7 @@ from typing import Any, Dict
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import SummarizationMiddleware
+from langchain.agents.structured_output import ToolStrategy
 from langchain.mcp import MCPAdapter
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -77,7 +78,7 @@ async def build_researcher_agent():
     return create_agent(
         model=model,
         tools=query_tools,
-        response_format=ResearcherResponse,
+        response_format=ToolStrategy(ResearcherResponse),
         middleware=[
             SummarizationMiddleware(
                 model=model,
