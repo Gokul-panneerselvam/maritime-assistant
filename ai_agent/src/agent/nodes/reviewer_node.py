@@ -24,6 +24,7 @@ from ai_agent.src.schemas.epistemic import (
     ConfirmedFact,
     UnverifiedReport,
     SystemInference,
+    PremiseCorrection,
 )
 from ai_agent.src.schemas.researcher_agent_dto import ResearcherResponse
 from ai_agent.src.schemas.grounding_review_dto import GroundingReview
@@ -116,6 +117,7 @@ def _extract_all_citations(researcher_response: ResearcherResponse) -> List[Dict
     add_all(researcher_response.confirmed_facts)
     add_all(researcher_response.unverified_reports)
     add_all(researcher_response.system_inferences)
+    add_all(researcher_response.false_premises)
 
     return citations
 
@@ -346,13 +348,23 @@ def _hydrate_maritime_response(
         for inf in (researcher_response.system_inferences or [])
     ]
 
+    false_premises = [
+        PremiseCorrection(
+            user_assumption=premise.user_assumption,
+            grounded_reality=premise.grounded_reality,
+            # Bare ids, like the other sections: the UI resolves chips by primary_id / citation_id.
+            citations=[str(c.id) for c in premise.citations],
+        )
+        for premise in (researcher_response.false_premises or [])
+    ]
+
     return MaritimeAgentResponse(
-        status="SUCCESS",
+        status="FALSE_PREMISE" if false_premises else "SUCCESS",
         executive_summary=researcher_response.summary,
         confirmed_facts=hydrated_facts,
         unverified_reports=hydrated_reports,
         system_inferences=hydrated_inferences,
-        false_premises_detected=[],
+        false_premises_detected=false_premises,
         citations=hydrated_citations,
         cypher_queries_executed=[],
     )

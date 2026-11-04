@@ -55,7 +55,7 @@ def input_guardrail_node(state: AgentState) -> InputGuardrailNodeResponse:
                         Evaluate the message according to safety and domain criteria.
                         """
 
-    llm = get_llm(temperature=1)
+    llm = get_llm(temperature=0.0)
     structured_llm = llm.with_structured_output(InputGuardrailResponse)
 
     try:

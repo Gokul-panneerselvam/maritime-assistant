@@ -61,7 +61,7 @@ def run_entity_resolution_llm(
                         Do not provide answer options.
                         """
 
-    llm = get_llm(temperature=1)
+    llm = get_llm(temperature=0.0)
     structured_llm = llm.with_structured_output(EntityResolutionResponse)
 
     try:
@@ -164,6 +164,14 @@ def entity_resolution_node(state: AgentState) -> EntityResolutionNodeResponse:
     result = run_entity_resolution_llm(resolver_messages)
 
     if result.is_ambiguous:
+        # Override spurious ambiguity when vessel is resolved and user refers to descriptive voyage ("current voyage", "this voyage", etc.)
+        query_lower = user_query.lower()
+        voyage_phrases = ["current voyage", "this voyage", "the voyage", "its voyage", "active voyage", "latest voyage", "next voyage", "delayed voyage"]
+        if result.resolved_vessels and any(phrase in query_lower for phrase in voyage_phrases):
+            logger.info("Overriding spurious voyage clarification: vessel is resolved (%s) and query uses descriptive voyage reference.", result.resolved_vessels)
+            result.is_ambiguous = False
+            result.clarification_needed = None
+            return build_final_resolution(result, user_query)
         return build_clarification_response(result, resolver_messages)
 
     return build_final_resolution(result, user_query)
