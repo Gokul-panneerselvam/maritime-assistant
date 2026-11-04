@@ -32,6 +32,15 @@ class SystemInference(BaseModel):
     citations: List[Citation] = Field(default_factory=list)
 
 
+class FalsePremise(BaseModel):
+    user_assumption: str = Field(description="The incorrect assumption in the user's question, in one sentence")
+    grounded_reality: str = Field(description="What the retrieved records show instead, in one or two sentences")
+    citations: List[Citation] = Field(
+        default_factory=list,
+        description="Records that contradict the assumption and establish the real situation"
+    )
+
+
 class ResearcherResponse(BaseModel):
     data_available: bool = Field(
         description=(
@@ -63,6 +72,14 @@ class ResearcherResponse(BaseModel):
     confirmed_facts: List[ConfirmedFact] = Field(default_factory=list)
     unverified_reports: List[UnverifiedReport] = Field(default_factory=list)
     system_inferences: List[SystemInference] = Field(default_factory=list)
+    false_premises: List[FalsePremise] = Field(
+        default_factory=list,
+        description=(
+            "Assumptions in the user's question that the retrieved records contradict. "
+            "Only allowed when data_available is true, because each one must be backed by the records "
+            "that show the real situation."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_no_data_consistency(self):
@@ -75,6 +92,11 @@ class ResearcherResponse(BaseModel):
                 raise ValueError(
                     "confirmed_facts and system_inferences must be empty when "
                     "data_available is false"
+                )
+            if self.false_premises:
+                raise ValueError(
+                    "false_premises must be empty when data_available is false; "
+                    "a false premise needs records that show the real situation"
                 )
         else:
             if self.no_data_reason or self.no_data_explanation:
@@ -92,5 +114,6 @@ __all__ = [
     "ConfirmedFact",
     "UnverifiedReport",
     "SystemInference",
+    "FalsePremise",
     "ResearcherResponse",
 ]

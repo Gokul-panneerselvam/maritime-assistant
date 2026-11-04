@@ -11,8 +11,8 @@ When running the API server (`http://localhost:8000`), the interactive documenta
 - **Swagger UI (Interactive API Explorer)**: [http://localhost:8000/docs](http://localhost:8000/docs)
   - Features interactive request testing with the `Authorize` button for JWT bearer tokens.
 - **ReDoc (Technical Documentation)**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **OpenAPI 3.1.0 Spec (JSON)**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) (also persisted at [`ai_agent/docs/openapi.json`](file:///ai_agent/docs/openapi.json))
-- **Swagger JSON Spec**: [`ai_agent/docs/swagger.json`](file:///ai_agent/docs/swagger.json)
+- **OpenAPI 3.1.0 Spec (JSON)**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) (also persisted at [`ai_agent/docs/openapi.json`](openapi.json))
+- **Swagger JSON Spec**: [`ai_agent/docs/swagger.json`](swagger.json)
 
 ---
 

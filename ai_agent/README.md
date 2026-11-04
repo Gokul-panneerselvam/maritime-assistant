@@ -45,20 +45,20 @@ flowchart TD
 
 ### The 5 Nodes
 
-1. **`node_1_guardrail` ([`guardrail_node.py`](file:///ai_agent/src/agent/nodes/guardrail_node.py))**:
+1. **`node_1_guardrail` ([`guardrail_node.py`](src/agent/nodes/guardrail_node.py))**:
    - Assesses query scope (commercial maritime fleet management, delays, incidents, bookings, port congestion).
    - Defends against adversarial prompt injections and jailbreak attempts.
-2. **`node_2_resolver` ([`entity_resolver_node.py`](file:///ai_agent/src/agent/nodes/entity_resolver_node.py))**:
+2. **`node_2_resolver` ([`entity_resolver_node.py`](src/agent/nodes/entity_resolver_node.py))**:
    - Standardizes temporal references (e.g., "last Tuesday", "yesterday noon") against snapshot timestamps into ISO 8601 UTC.
    - Detects ambiguous entity references (e.g., "the Atlas ship") and returns a clean clarification question through an isolated clarification channel.
-3. **`node_3_planner` ([`planner_node.py`](file:///ai_agent/src/agent/nodes/planner_node.py))**:
+3. **`node_3_planner` ([`planner_node.py`](src/agent/nodes/planner_node.py))**:
    - Generates a structured research plan (`summary_of_intent`, `target_entities`, `relevant_kg_nodes`, `relevant_relationships`, `data_points_to_check`).
    - Renders the plan directly into the researcher agent's system prompt.
-4. **`node_4_researcher` ([`researcher_node.py`](file:///ai_agent/src/agent/nodes/researcher_node.py))**:
+4. **`node_4_researcher` ([`researcher_node.py`](src/agent/nodes/researcher_node.py))**:
    - Connects to the Maritime FastMCP Server over Streamable HTTP (`MARITIME_MCP_SERVER_URL`).
    - Exclusively uses specialized domain tools (`get_vessel_context`, `get_voyage_context`, `scan_voyages`, `get_port_context`, `search_incident_history`, `get_cargo_exposure`, `track_booking`, `search_messages`, `get_knowledge_graph_schema`). Raw Cypher and mutation tools are excluded.
    - Produces compact structured output (`ResearcherResponse`) containing claims and citations `{node, id}`, or signals `data_available=false` with `no_data_reason`.
-5. **`node_5_validator` ([`reviewer_node.py`](file:///ai_agent/src/agent/nodes/reviewer_node.py))**:
+5. **`node_5_validator` ([`reviewer_node.py`](src/agent/nodes/reviewer_node.py))**:
    - Batch-fetches full attributes and connected backing messages across all KG node types using a single Cypher query (`UNWIND $citations AS citation`).
    - Runs deterministic existence verification against Neo4j database records.
    - On review pass, deterministically hydrates verified node properties and message bodies into the final `MaritimeAgentResponse`.
@@ -84,12 +84,15 @@ Every response is structured to maintain strict epistemic rigor:
 
 Interactive, architectural, and machine-readable API documentation is available:
 
-- **Graph Architecture & Design**: [`ai_agent/docs/DESIGN.md`](file:///ai_agent/docs/DESIGN.md)
+- **Graph Architecture & Design**: [`ai_agent/docs/DESIGN.md`](docs/DESIGN.md)
+- **Evaluation Report**: [`ai_agent/docs/EVALUATION.md`](docs/EVALUATION.md)
+- **Evaluation Execution Log**: [`ai_agent/docs/EVALUATION_EXECUTIONS.md`](docs/EVALUATION_EXECUTIONS.md)
+- **Write-up**: [`ai_agent/docs/WRITEUP.md`](docs/WRITEUP.md)
 - **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **Static OpenAPI JSON**: [`ai_agent/docs/openapi.json`](file:///ai_agent/docs/openapi.json)
-- **Static Swagger JSON**: [`ai_agent/docs/swagger.json`](file:///ai_agent/docs/swagger.json)
-- **Swagger Markdown Reference**: [`ai_agent/docs/SWAGGER.md`](file:///ai_agent/docs/SWAGGER.md)
+- **Static OpenAPI JSON**: [`ai_agent/docs/openapi.json`](docs/openapi.json)
+- **Static Swagger JSON**: [`ai_agent/docs/swagger.json`](docs/swagger.json)
+- **Swagger Markdown Reference**: [`ai_agent/docs/SWAGGER.md`](docs/SWAGGER.md)
 
 ---
 

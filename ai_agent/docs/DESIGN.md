@@ -72,7 +72,7 @@ flowchart TD
 ## 3. Node Specifications & Implementation
 
 ### Node 1: Input Guardrail (`node_1_guardrail`)
-- **Module:** [`ai_agent.src.agent.nodes.guardrail_node`](file:///ai_agent/src/agent/nodes/guardrail_node.py)
+- **Module:** [`ai_agent.src.agent.nodes.guardrail_node`](../src/agent/nodes/guardrail_node.py)
 - **Function:** `input_guardrail_node(state: AgentState) -> InputGuardrailNodeResponse`
 - **Output Schema:** `InputGuardrailNodeResponse(user_query, validation_status, final_response)`
 
@@ -87,7 +87,7 @@ flowchart TD
 ---
 
 ### Node 2: Entity Resolver & Temporal Normalizer (`node_2_resolver`)
-- **Module:** [`ai_agent.src.agent.nodes.entity_resolver_node`](file:///ai_agent/src/agent/nodes/entity_resolver_node.py)
+- **Module:** [`ai_agent.src.agent.nodes.entity_resolver_node`](../src/agent/nodes/entity_resolver_node.py)
 - **Function:** `entity_resolution_node(state: AgentState) -> EntityResolutionNodeResponse`
 - **Output Schema:** `EntityResolutionNodeResponse(normalized_query, resolved_entities, needs_clarification, ...)`
 
@@ -107,7 +107,7 @@ flowchart TD
 ---
 
 ### Node 3: Data Research Planner (`node_3_planner`)
-- **Module:** [`ai_agent.src.agent.nodes.planner_node`](file:///ai_agent/src/agent/nodes/planner_node.py)
+- **Module:** [`ai_agent.src.agent.nodes.planner_node`](../src/agent/nodes/planner_node.py)
 - **Function:** `planner_node(state: AgentState) -> Dict[str, Any]`
 - **Output:** `{"research_plan": str}`
 
@@ -124,7 +124,7 @@ flowchart TD
 ---
 
 ### Node 4: Researcher ReAct Agent (`node_4_researcher`)
-- **Module:** [`ai_agent.src.agent.nodes.researcher_node`](file:///ai_agent/src/agent/nodes/researcher_node.py)
+- **Module:** [`ai_agent.src.agent.nodes.researcher_node`](../src/agent/nodes/researcher_node.py)
 - **Function:** `researcher_node(state: AgentState) -> Dict[str, Any]`
 - **Output:** `{"draft_response": ResearcherResponse, "cypher_queries_executed": List[str]}`
 
@@ -153,7 +153,7 @@ To ensure reliability, security, and consistent graph-text synthesis, the resear
 ---
 
 ### Node 5: Grounding Validator & Hydration (`node_5_validator`)
-- **Module:** [`ai_agent.src.agent.nodes.reviewer_node`](file:///ai_agent/src/agent/nodes/reviewer_node.py)
+- **Module:** [`ai_agent.src.agent.nodes.reviewer_node`](../src/agent/nodes/reviewer_node.py)
 - **Function:** `validator_and_hydration_node(state: AgentState) -> Dict[str, Any]`
 - **Output:** `{"final_response": MaritimeAgentResponse, "validation_status": "PASSED" | "FAILED", "db_ground_truth": dict}`
 
@@ -173,7 +173,7 @@ Node 5 enforces database ground-truth fidelity without secondary LLM grading lat
 
 ## 4. State Management (`AgentState`)
 
-The complete state schema is defined in [`ai_agent/src/agent/state.py`](file:///ai_agent/src/agent/state.py):
+The complete state schema is defined in [`ai_agent/src/agent/state.py`](../src/agent/state.py):
 
 ```python
 class AgentState(TypedDict):
@@ -298,7 +298,7 @@ classDiagram
 
 ## 6. Persistence & Session Checkpointing
 
-- **Checkpointer:** `AsyncSqliteCheckpointer` located in [`ai_agent/src/agent/memory/checkpointer.py`](file:///ai_agent/src/agent/memory/checkpointer.py).
+- **Checkpointer:** `AsyncSqliteCheckpointer` located in [`ai_agent/src/agent/memory/checkpointer.py`](../src/agent/memory/checkpointer.py).
 - **Storage Path:** `storage/checkpoints.db`.
 - **Session Isolation:** Executions are partitioned by `thread_id` configured via LangGraph runnable config:
   ```python

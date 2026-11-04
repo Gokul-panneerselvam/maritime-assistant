@@ -49,15 +49,18 @@ flowchart LR
 Managed via `llm_factory.py` using `.env`:
 
 ```ini
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=sk-or-v1-...
-OPENROUTER_MODEL=deepseek/deepseek-v4-flash-vision-exp
-OPENROUTER_PROVIDER_NAME=deepinfra/fp8
-OPENROUTER_MAX_TOKENS=4096
+LLM_PROVIDER=azure
+AZURE_API_KEY=...
+AZURE_ENDPOINT=https://<your-resource>.services.ai.azure.com/openai/v1
+AZURE_DEPLOYMENT_NAME=<your deployment name>
+AZURE_MAX_TOKENS=8192
 ```
 
+The loader uses the same provider as the agent: `LLM_PROVIDER=azure`, or Azure is picked automatically when `AZURE_API_KEY` is set and no provider is named. If the Azure settings are incomplete the loader stops with an error naming the missing ones. The temperature is left out for reasoning deployments (names containing `luna`, `o1`, `o3`, `reasoning`, `preview`); set `AZURE_TEMPERATURE` to force a value or `none` to omit it.
+
 Supported providers:
-- **OpenRouter** (`deepseek/deepseek-v4-flash-vision-exp` via `deepinfra/fp8`, `qwen/qwen3.8-27b`)
+- **Azure AI** (any OpenAI-compatible deployment, for example `gpt-6-luna`)
+- **OpenRouter** (`deepseek/deepseek-v4-flash-vision-exp` via `deepinfra/fp8`, `qwen/qwen3.8-27b`; set `OPENROUTER_API_KEY`)
 - **Groq** (`openai/gpt-oss-20b`)
 - **Google Gemini** (`gemini-3.8-flash`)
 
@@ -66,6 +69,8 @@ Prompts are decoupled in [`prompts/message_loader_prompts.yaml`](file:///prompts
 ---
 
 ## 4. CLI Runner Usage
+
+A worked example with inputs, outputs and LangSmith traces: [`SAMPLE_INGESTION_RUN.md`](../../SAMPLE_INGESTION_RUN.md).
 
 ```powershell
 # Ingest core directory (15 messages)

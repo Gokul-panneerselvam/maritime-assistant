@@ -314,7 +314,7 @@ flowchart LR
 
 ## 9. Verification & Test Architecture
 
-The framework includes comprehensive test coverage across all pipeline layers in [`tests/test_message_loader.py`](file:///tests/test_message_loader.py):
+The framework includes comprehensive test coverage across all pipeline layers in [`tests/test_message_loader.py`](../../tests/test_message_loader.py):
 
 | Test Suite Component | Test Cases Covered |
 | :--- | :--- |
